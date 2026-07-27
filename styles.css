@@ -1,0 +1,1034 @@
+/* ── Trynalist ─────────────────────────────────────────────────────── */
+
+/* Panel */
+.trynalist-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 4px 8px 8px;
+}
+.trynalist-panel-title { font-weight: 600; }
+.trynalist-panel-empty {
+	color: var(--text-muted);
+	padding: 12px;
+	font-size: var(--font-ui-small);
+}
+.trynalist-doc-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 10px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+.trynalist-doc-row:hover { background: var(--background-modifier-hover); }
+.trynalist-doc-name { flex: 1; }
+.trynalist-doc-count {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+.trynalist-doc-export {
+	color: var(--text-faint);
+	visibility: hidden;
+	padding: 0 2px;
+}
+.trynalist-doc-row:hover .trynalist-doc-export { visibility: visible; }
+.trynalist-doc-export:hover { color: var(--text-normal); }
+
+/* Doc view */
+.trynalist-doc { padding: 12px 24px 48px; }
+.trynalist-crumbs {
+	margin-bottom: 12px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+.trynalist-crumb { cursor: pointer; }
+.trynalist-crumb:hover { color: var(--text-normal); text-decoration: underline; }
+
+.trynalist-item { position: relative; }
+.trynalist-children {
+	margin-left: 22px;
+	border-left: 1px solid var(--background-modifier-border);
+	padding-left: 6px;
+}
+.trynalist-row {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	padding: 2px 0;
+	min-height: 26px;
+}
+.trynalist-collapse {
+	width: 20px;
+	height: 20px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-faint);
+	cursor: pointer;
+	user-select: none;
+	font-size: 1em;
+	border-radius: var(--radius-s);
+	flex: 0 0 auto;
+}
+.trynalist-collapse .svg-icon { width: 14px; height: 14px; }
+/* The second hover icon beside the menu: magnifier (zoom) by default, or +/-
+   when the bullet has been set to zoom instead. */
+.trynalist-rowaction {
+	width: 20px;
+	height: 20px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	color: var(--text-faint);
+	cursor: pointer;
+	border-radius: var(--radius-s);
+	opacity: 0;
+	transition: opacity 90ms ease;
+}
+.trynalist-rowaction .svg-icon { width: 14px; height: 14px; }
+.trynalist-rowaction.is-empty { pointer-events: none; }
+.trynalist-row:hover .trynalist-rowaction,
+.trynalist-row:focus-within .trynalist-rowaction { opacity: 1; }
+.trynalist-rowaction:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.trynalist-collapse:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+/* Nothing to collapse: keep the width for alignment, but no box and no hover. */
+.trynalist-collapse.is-empty { pointer-events: none; background: none; }
+/* Dynalist reveals the collapse arrow on hover, and shows it always when the
+   item is collapsed (otherwise hidden children would be invisible). */
+.trynalist-collapse { opacity: 0; transition: opacity 90ms ease; }
+.trynalist-row:hover .trynalist-collapse,
+.trynalist-row:focus-within .trynalist-collapse { opacity: 1; }
+.trynalist-bullet.has-hidden-children ~ .trynalist-collapse,
+.trynalist-row:has(.has-hidden-children) .trynalist-collapse { opacity: 1; }
+.trynalist-bullet {
+	width: 22px;
+	height: 22px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-muted);
+	cursor: grab;
+	user-select: none;
+	font-size: 1.5em;
+	line-height: 1;
+	flex: 0 0 auto;
+	position: relative;
+}
+.trynalist-bullet.is-numbered {
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+	width: auto;
+	min-width: 22px;
+	padding: 0 3px;
+}
+.trynalist-bullet:active { cursor: grabbing; }
+/* The dot itself: drawn, centred in the hit target, and the thing the
+   collapsed-ring is painted on so the two are concentric. */
+.trynalist-bullet-dot {
+	width: 100%;
+	height: 100%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+}
+.trynalist-bullet:not(.is-numbered) .trynalist-bullet-dot::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: currentColor;
+}
+.trynalist-bullet.is-numbered .trynalist-bullet-dot {
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+	border-radius: var(--radius-s);
+}
+/* Under the cursor the dot becomes the control: +/- when there is something
+   to collapse, a magnifier when the bullet is set to zoom, and a muted dot
+   when the item has nothing below it (rather than an empty square). */
+.trynalist-bullet-hover {
+	position: absolute;
+	inset: 0;
+	display: none;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-normal);
+}
+.trynalist-bullet-hover .svg-icon { width: 13px; height: 13px; }
+.trynalist-bullet-hover.is-inert { color: var(--text-faint); }
+.trynalist-bullet:hover .trynalist-bullet-hover { display: inline-flex; }
+.trynalist-bullet:hover .trynalist-bullet-dot { visibility: hidden; }
+/* Nothing to expand: no pointer affordance, but still a tooltip. */
+.trynalist-bullet:hover { color: var(--interactive-accent); }
+.trynalist-check {
+	margin: 0 4px;
+	width: 17px;
+	height: 17px;
+	flex: 0 0 auto;
+}
+.trynalist-text {
+	flex: 1;
+	min-height: 1.4em;
+	outline: none;
+	word-break: break-word;
+}
+.trynalist-row.is-checked .trynalist-text {
+	color: var(--text-faint);
+}
+body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
+	text-decoration: line-through;
+}
+.trynalist-note {
+	/* Aligned with the row's text: menu (22) + collapse (20) + bullet (22) +
+	   the row's three 3px gaps. A note is a continuation of the line above it,
+	   so it should start where that line's text starts. */
+	margin: 0 0 2px 73px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	outline: none;
+	white-space: pre-wrap;
+}
+.trynalist-empty-hint {
+	color: var(--text-muted);
+	margin-top: 16px;
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
+/* Dynalist color labels 1–6 */
+.trynalist-row.tl-color-1 .trynalist-text { background: rgba(255, 106, 106, 0.18); }
+.trynalist-row.tl-color-2 .trynalist-text { background: rgba(255, 168, 76, 0.18); }
+.trynalist-row.tl-color-3 .trynalist-text { background: rgba(255, 220, 90, 0.22); }
+.trynalist-row.tl-color-4 .trynalist-text { background: rgba(112, 200, 120, 0.18); }
+.trynalist-row.tl-color-5 .trynalist-text { background: rgba(96, 170, 255, 0.18); }
+.trynalist-row.tl-color-6 .trynalist-text { background: rgba(190, 130, 255, 0.18); }
+
+/* Grouping folders in the panel */
+.trynalist-group-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 10px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	color: var(--text-muted);
+	font-weight: 600;
+	font-size: var(--font-ui-small);
+}
+.trynalist-group-row:hover { background: var(--background-modifier-hover); }
+.trynalist-group-row:hover .trynalist-doc-export { visibility: visible; }
+.trynalist-group-tri { width: 12px; font-size: 0.8em; }
+.trynalist-group-name { flex: 1; }
+.trynalist-doc-broken .trynalist-doc-name { color: var(--text-error); }
+
+/* Menu handle — left of the bullet (Dynalist placement) */
+.trynalist-menu-handle {
+	width: 22px;
+	height: 22px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-faint);
+	cursor: pointer;
+	user-select: none;
+	visibility: hidden;
+	border-radius: var(--radius-s);
+	flex: 0 0 auto;
+}
+.trynalist-menu-handle .svg-icon { width: 16px; height: 16px; }
+.trynalist-menu-handle:hover { background: var(--background-modifier-hover); }
+.trynalist-row:hover .trynalist-menu-handle { visibility: visible; }
+.trynalist-menu-handle:hover { color: var(--text-normal); }
+
+/* Collapsed items get a ring around the bullet (Dynalist affordance).
+   Painted as a background circle rather than a box-shadow: the bullet is a
+   22px hit target, so a shadow ring hugged the target instead of the dot and
+   read as an oddly large halo. */
+.trynalist-bullet.has-hidden-children .trynalist-bullet-dot {
+	background: var(--background-modifier-border);
+	/* Sized to the dot, not the 22px hit target, and concentric with it. */
+	width: 15px;
+	height: 15px;
+	margin: auto;
+}
+
+/* Bullet hover tooltip: created / modified */
+.trynalist-tooltip {
+	position: fixed;
+	z-index: var(--layer-tooltip, 100);
+	background: var(--background-secondary-alt);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	box-shadow: var(--shadow-s);
+	padding: 6px 9px;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.45;
+	pointer-events: none;
+	white-space: nowrap;
+}
+
+/* Drag and drop */
+.trynalist-row.is-dragging { opacity: 0.4; }
+.trynalist-row.drop-before { box-shadow: inset 0 2px 0 0 var(--interactive-accent); }
+.trynalist-row.drop-after { box-shadow: inset 0 -2px 0 0 var(--interactive-accent); }
+.trynalist-row.drop-child {
+	box-shadow: inset 2px 0 0 0 var(--interactive-accent);
+	background: var(--background-modifier-hover);
+}
+
+/* Heading levels H1–H6 */
+.trynalist-row.is-h1 .trynalist-text { font-size: 1.6em; font-weight: 700; }
+.trynalist-row.is-h2 .trynalist-text { font-size: 1.4em; font-weight: 700; }
+.trynalist-row.is-h3 .trynalist-text { font-size: 1.22em; font-weight: 650; }
+.trynalist-row.is-h4 .trynalist-text { font-size: 1.1em; font-weight: 650; }
+.trynalist-row.is-h5 .trynalist-text { font-size: 1em; font-weight: 650; }
+.trynalist-row.is-h6 .trynalist-text { font-size: 0.95em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Document title (click to rename) */
+.trynalist-doc-title { font-weight: 600; color: var(--text-normal); }
+.trynalist-doc-title:hover { text-decoration: underline; cursor: text; }
+
+/* Colour swatches in the item menu */
+.trynalist-swatch {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	margin-right: 8px;
+	border-radius: 3px;
+	vertical-align: -1px;
+	border: 1px solid var(--background-modifier-border);
+}
+.tl-swatch-0 { background: transparent; }
+.tl-swatch-1 { background: rgb(255, 106, 106); }
+.tl-swatch-2 { background: rgb(255, 168, 76); }
+.tl-swatch-3 { background: rgb(255, 220, 90); }
+.tl-swatch-4 { background: rgb(112, 200, 120); }
+.tl-swatch-5 { background: rgb(96, 170, 255); }
+.tl-swatch-6 { background: rgb(190, 130, 255); }
+
+/* Multi-select */
+.trynalist-row.is-selected {
+	background: var(--text-selection);
+	border-radius: var(--radius-s);
+}
+.trynalist-row.is-selected .trynalist-text::selection { background: transparent; }
+
+/* Drop guide — shows the landing row AND depth while dragging */
+.trynalist-doc { position: relative; }
+.trynalist-drop-guide {
+	position: absolute;
+	right: 24px;
+	height: 2px;
+	background: var(--interactive-accent);
+	border-radius: 1px;
+	pointer-events: none;
+	z-index: 5;
+	transform: translateY(-1px);
+}
+.trynalist-drop-guide-knob {
+	position: absolute;
+	left: -5px;
+	top: -3px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--interactive-accent);
+}
+.trynalist-drop-guide.is-copy {
+	background: var(--color-green, var(--interactive-accent));
+}
+.trynalist-drop-guide.is-copy .trynalist-drop-guide-knob {
+	background: var(--color-green, var(--interactive-accent));
+}
+.trynalist-drop-guide.is-copy::after {
+	content: "＋ copy";
+	position: absolute;
+	right: 0;
+	top: -9px;
+	font-size: 10px;
+	color: var(--color-green, var(--interactive-accent));
+	background: var(--background-primary);
+	padding: 0 4px;
+}
+
+/* Search + suggestions */
+.trynalist-search {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-bottom: 10px;
+}
+.trynalist-search input { flex: 1; }
+.trynalist-search-count {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin-bottom: 8px;
+}
+.trynalist-result {
+	padding: 6px 8px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+.trynalist-result:hover { background: var(--background-modifier-hover); }
+.trynalist-result-text { color: var(--text-normal); }
+.trynalist-suggest-trail {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+}
+.trynalist-root-choice { font-weight: 600; }
+.trynalist-search-hint {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	margin: -4px 0 10px;
+	line-height: 1.5;
+}
+
+/* Item links + link popover */
+.trynalist-link {
+	color: var(--link-color, var(--text-accent));
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	cursor: pointer;
+}
+.trynalist-link:hover { text-decoration-style: solid; }
+.trynalist-link-suggest {
+	position: fixed;
+	z-index: var(--layer-menu, 200);
+	width: 330px;
+	max-height: 250px;
+	overflow-y: auto;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: var(--shadow-s);
+	padding: 4px;
+}
+.trynalist-link-item {
+	padding: 5px 8px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+.trynalist-link-item.is-active,
+.trynalist-link-item:hover { background: var(--background-modifier-hover); }
+.trynalist-panel-section {
+	font-size: var(--font-ui-smaller);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--text-faint);
+	padding: 10px 10px 4px;
+}
+
+/* ── Phase C: inline formatting ─────────────────────────────────────── */
+.trynalist-code {
+	background: var(--code-background);
+	color: var(--code-normal);
+	padding: 0 4px;
+	border-radius: var(--radius-s);
+	font-size: 0.9em;
+}
+.trynalist-tag {
+	color: var(--text-accent);
+	cursor: pointer;
+	border-radius: var(--radius-s);
+	padding: 0 2px;
+}
+.tl-tag-bg .trynalist-tag {
+	background: var(--tag-background, rgba(122, 162, 247, 0.15));
+}
+.trynalist-tag:hover { text-decoration: underline; }
+.trynalist-inline-image {
+	max-width: min(100%, 320px);
+	max-height: 220px;
+	border-radius: var(--radius-s);
+	vertical-align: middle;
+	margin: 2px 4px;
+}
+.trynalist-embed-missing {
+	color: var(--text-error);
+	text-decoration: line-through;
+}
+.trynalist-text del { opacity: 0.7; }
+
+/* Density */
+.tl-density-compact .trynalist-row { min-height: 22px; padding: 0; }
+.tl-density-cozy .trynalist-row { min-height: 26px; padding: 2px 0; }
+.tl-density-comfortable .trynalist-row { min-height: 34px; padding: 5px 0; }
+
+/* Current-item highlight */
+.tl-highlight-current .trynalist-row:focus-within {
+	background: var(--background-modifier-hover);
+	border-radius: var(--radius-s);
+}
+
+/* Center alignment + border */
+.trynalist-doc.tl-center .trynalist-list,
+.trynalist-doc.tl-center .trynalist-crumbs { max-width: 720px; margin-inline: auto; }
+.trynalist-doc.tl-bordered .trynalist-list {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: 10px 12px;
+}
+
+/* One-line notes */
+.trynalist-note.is-one-line {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
+/* Dates */
+.trynalist-date {
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+	border-radius: var(--radius-s);
+	padding: 0 6px;
+	margin: 0 2px;
+	font-size: 0.85em;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.trynalist-date:hover { background: var(--background-modifier-hover); }
+.trynalist-date.is-overdue {
+	background: var(--background-modifier-error, rgba(255, 80, 80, 0.18));
+	color: var(--text-error);
+}
+.trynalist-date-preview {
+	font-size: var(--font-ui-large);
+	font-weight: 600;
+	padding: 4px 0 10px;
+}
+
+/* ── Panel icons (larger, aligned) ──────────────────────────────────── */
+.trynalist-row-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	flex: 0 0 auto;
+	color: var(--text-muted);
+}
+.trynalist-row-icon .svg-icon { width: 17px; height: 17px; }
+.trynalist-row-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex: 0 0 auto;
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	visibility: hidden;
+}
+.trynalist-row-action .svg-icon { width: 17px; height: 17px; }
+.trynalist-doc-row:hover .trynalist-row-action,
+.trynalist-group-row:hover .trynalist-row-action { visibility: visible; }
+.trynalist-row-action:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.trynalist-group-tri {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	flex: 0 0 auto;
+}
+.trynalist-group-tri .svg-icon { width: 15px; height: 15px; }
+.trynalist-panel-new {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+}
+.trynalist-panel-new .svg-icon { width: 18px; height: 18px; }
+.trynalist-doc-row, .trynalist-group-row { min-height: 30px; }
+.trynalist-doc-row.is-drop-target,
+.trynalist-group-row.is-drop-target {
+	background: var(--background-modifier-hover);
+	box-shadow: inset 0 0 0 2px var(--interactive-accent);
+}
+.trynalist-archive-head { cursor: pointer; display: flex; align-items: center; gap: 4px; }
+
+/* Integrity report */
+.trynalist-integrity-summary { color: var(--text-muted); margin-bottom: 6px; }
+.trynalist-integrity-count { font-weight: 600; margin-bottom: 8px; }
+.trynalist-integrity-list { max-height: 50vh; overflow-y: auto; }
+.trynalist-integrity-item {
+	padding: 8px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+.trynalist-integrity-kind {
+	font-size: var(--font-ui-smaller);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-error);
+}
+
+/* Recurrence */
+.trynalist-date.is-recurring { padding-right: 4px; }
+.trynalist-repeat-mark { margin-left: 4px; opacity: 0.75; }
+.trynalist-repeat-summary {
+	color: var(--text-muted);
+	padding: 2px 0 8px;
+}
+.trynalist-repeat-count { width: 64px; }
+.trynalist-weekday-row {
+	display: flex;
+	gap: 4px;
+	flex-wrap: wrap;
+	padding: 0 0 12px;
+}
+.trynalist-weekday-row.is-hidden { display: none; }
+.trynalist-weekday {
+	padding: 4px 8px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+}
+.trynalist-weekday.is-on {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+.trynalist-archived-badge {
+	margin-left: 8px;
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+/* Agenda */
+.trynalist-agenda-bucket {
+	padding: 6px 10px 2px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-weight: 600;
+}
+.trynalist-agenda-row { align-items: flex-start; padding: 6px 10px; }
+.trynalist-agenda-body { flex: 1; min-width: 0; }
+.trynalist-agenda-row.is-overdue .trynalist-row-icon { color: var(--text-error); }
+.trynalist-notice-line { margin-top: 4px; }
+.trynalist-notice-line button { margin-right: 6px; }
+
+/* View switcher + flat / article presentations */
+.trynalist-view-switch {
+	display: inline-flex;
+	gap: 2px;
+	margin-left: 12px;
+	vertical-align: middle;
+}
+.trynalist-view-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 24px;
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	cursor: pointer;
+}
+.trynalist-view-btn .svg-icon { width: 16px; height: 16px; }
+.trynalist-view-btn:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.trynalist-view-btn.is-active {
+	background: var(--background-modifier-hover);
+	color: var(--text-accent);
+}
+.trynalist-flat-item {
+	padding: 4px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+.trynalist-flat-item .trynalist-suggest-trail { padding-left: 73px; }
+.trynalist-flat-item .trynalist-suggest-trail .trynalist-link,
+.trynalist-flat-item .trynalist-suggest-trail strong,
+.trynalist-flat-item .trynalist-suggest-trail em { font-size: inherit; }
+.trynalist-article { max-width: 720px; }
+.trynalist-article p { margin: 0.6em 0; }
+.trynalist-article p.is-checked { color: var(--text-faint); text-decoration: line-through; }
+.trynalist-article .trynalist-article-note {
+	color: var(--text-muted);
+	font-size: 0.95em;
+	margin-left: 1em;
+	border-left: 2px solid var(--background-modifier-border);
+	padding-left: 0.8em;
+}
+.trynalist-import-area {
+	width: 100%;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	margin-bottom: 10px;
+}
+
+/* ── Attachments manager ────────────────────────────────────────────── */
+.trynalist-attachments-modal { width: min(760px, 90vw); }
+.trynalist-attach-controls {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	margin: 8px 0 12px;
+}
+.trynalist-attach-controls input[type="search"] { flex: 1; }
+.trynalist-attach-tab {
+	padding: 4px 10px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+}
+.trynalist-attach-tab.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+.trynalist-attach-list { max-height: 60vh; overflow-y: auto; }
+.trynalist-attach-row {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	padding: 8px 6px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+}
+.trynalist-attach-row:hover { background: var(--background-modifier-hover); }
+.trynalist-attach-row.is-orphan .trynalist-doc-name { color: var(--text-muted); }
+.trynalist-attach-row.is-missing .trynalist-doc-name { color: var(--text-error); }
+.trynalist-attach-thumb {
+	width: 44px;
+	height: 44px;
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	overflow: hidden;
+}
+.trynalist-attach-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.trynalist-attach-thumb .svg-icon { width: 20px; height: 20px; color: var(--text-faint); }
+.trynalist-attach-body { flex: 1; min-width: 0; }
+.trynalist-attach-use {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin-top: 3px;
+}
+.trynalist-attach-jump {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px 5px;
+	height: 22px;
+}
+.trynalist-attach-jump .svg-icon { width: 14px; height: 14px; }
+.trynalist-attach-orphan-note {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	font-style: italic;
+	margin-top: 3px;
+}
+.trynalist-attach-actions { display: flex; gap: 2px; flex: 0 0 auto; }
+.trynalist-row-action.is-visible { visibility: visible; }
+.trynalist-attach-preview {
+	position: fixed;
+	z-index: var(--layer-tooltip, 100);
+	max-width: 320px;
+	max-height: 320px;
+	padding: 4px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: var(--shadow-l);
+	pointer-events: none;
+}
+.trynalist-attach-preview img { max-width: 310px; max-height: 310px; display: block; }
+.trynalist-panel-actions { display: flex; gap: 4px; align-items: center; }
+
+/* An item may contain deliberate line breaks (Ctrl+Shift+Enter). */
+.trynalist-text { white-space: pre-wrap; }
+
+/* Notes render through Obsidian, so its markdown styles apply inside them. */
+.trynalist-note[contenteditable="false"] { cursor: text; }
+.trynalist-note p:first-child { margin-top: 0; }
+.trynalist-note p:last-child { margin-bottom: 0; }
+.trynalist-note pre { margin: 6px 0; }
+.trynalist-note.is-one-line pre,
+.trynalist-note.is-one-line img { display: none; }
+
+/* ── Mind map: a one-sided bracket, read-only ───────────────────────── */
+.trynalist-mindmap { display: flex; flex-direction: column; height: 100%; }
+.trynalist-mindmap-bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 4px 0 10px;
+	flex: 0 0 auto;
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin-bottom: 10px;
+}
+.trynalist-mindmap-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 8px;
+	font-size: var(--font-ui-smaller);
+}
+.trynalist-mindmap-btn .svg-icon { width: 15px; height: 15px; }
+.trynalist-mindmap-crumbs { flex: 1; min-width: 0; font-size: var(--font-ui-small); }
+.trynalist-mindmap-zoom { display: flex; align-items: center; gap: 4px; }
+.trynalist-mindmap-level {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	min-width: 42px;
+	text-align: center;
+}
+.trynalist-mindmap-scroll { flex: 1; overflow: auto; }
+.trynalist-mindmap-canvas { position: relative; transform-origin: 0 0; }
+.trynalist-mindmap-lines { position: absolute; inset: 0; pointer-events: none; }
+.trynalist-mindmap-edge {
+	fill: none;
+	stroke: var(--background-modifier-border);
+	stroke-width: 1.5;
+}
+.trynalist-mindmap-node {
+	position: absolute;
+	box-sizing: border-box;
+	padding: 6px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+	font-size: var(--font-ui-small);
+	line-height: 1.35;
+	cursor: pointer;
+	overflow: hidden;
+}
+.trynalist-mindmap-node:hover { border-color: var(--interactive-accent); }
+.trynalist-mindmap-node.is-selected {
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+.trynalist-mindmap-node.is-checked { color: var(--text-faint); text-decoration: line-through; }
+.trynalist-mindmap-node.is-h1 { font-size: var(--font-ui-medium); font-weight: 700; }
+.trynalist-mindmap-node.is-h2 { font-weight: 650; }
+.trynalist-mindmap-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin-top: 3px;
+	max-height: 32px;
+	overflow: hidden;
+}
+.trynalist-mindmap-more {
+	display: inline-block;
+	margin-top: 3px;
+	padding: 0 5px;
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+
+/* Settings rows hidden in place — toggling quiet hours used to rebuild the
+   whole tab, which threw the scroll position around. */
+.trynalist-hidden { display: none !important; }
+
+/* Panel section heads: collapsible, with an optional button that opens the
+   section's own pane. */
+.trynalist-section-head {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	cursor: pointer;
+	user-select: none;
+}
+.trynalist-section-label { flex: 1; }
+.trynalist-section-head .trynalist-row-action { opacity: 0; }
+.trynalist-section-head:hover .trynalist-row-action { opacity: 1; }
+.trynalist-agenda-bucket { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+/* Mind map: the sizer carries the scaled footprint so the scrollbars describe
+   the zoomed map, and the scroller pans under the pointer. */
+.trynalist-mindmap-scroll { overflow: auto; cursor: grab; }
+.trynalist-mindmap-scroll.is-panning { cursor: grabbing; user-select: none; }
+.trynalist-mindmap-sizer { position: relative; }
+.trynalist-mindmap-canvas { transform-origin: 0 0; }
+.trynalist-mindmap-node.is-root {
+	border-color: var(--interactive-accent);
+	font-weight: var(--font-semibold);
+}
+
+/* Fenced code inside a note: a header strip with the language on the left and
+   Obsidian's own copy button on the right, on one line. */
+.trynalist-code-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 3px 10px;
+	margin-top: 6px;
+	background: var(--background-modifier-border);
+	border-radius: var(--radius-s) var(--radius-s) 0 0;
+	font-size: var(--font-smallest);
+	color: var(--text-muted);
+}
+.trynalist-code-lang {
+	font-family: var(--font-monospace);
+	text-transform: lowercase;
+	letter-spacing: 0.04em;
+}
+.trynalist-code-bar .copy-code-button {
+	position: static;
+	opacity: 1;
+	display: inline-flex;
+	padding: 0 4px;
+	background: none;
+	border: none;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.trynalist-code-bar .copy-code-button:hover { color: var(--text-normal); }
+.trynalist-code-bar.is-attached + pre {
+	margin-top: 0;
+	border-radius: 0 0 var(--radius-s) var(--radius-s);
+}
+
+/* Mirrors and portals: a window onto a subtree that lives elsewhere. Tinted
+   and marked, because everything inside one is read-only and belongs to
+   another document. */
+.trynalist-mirror-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	border-radius: var(--radius-s);
+}
+.trynalist-mirror-head:hover { background: var(--background-modifier-hover); }
+.trynalist-mirror-label { flex: 1; font-weight: var(--font-medium); }
+.trynalist-mirror-source {
+	font-size: var(--font-smallest);
+	color: var(--text-faint);
+	white-space: nowrap;
+}
+.trynalist-mirror-body {
+	border-left: 2px solid var(--interactive-accent);
+	margin-left: 10px;
+	padding-left: 8px;
+	opacity: 0.92;
+}
+.trynalist-mirror-row .trynalist-text { cursor: default; }
+.trynalist-mirror-row .trynalist-bullet { cursor: default; }
+.trynalist-mirror-missing .trynalist-text { color: var(--text-error); }
+.trynalist-mirror-pending { color: var(--text-faint); font-style: italic; }
+
+/* Confirm dialogs are two lines and a pair of buttons; Setting's divider reads
+   as a stray rule in that context. */
+/* Obsidian styles `.modal .setting-item` with a top border; a one-class rule
+   loses to it, which is why the divider survived the first attempt. */
+.modal .setting-item.trynalist-modal-buttons,
+.trynalist-modal-buttons.setting-item {
+	border-top: 0 none;
+	padding-top: 12px;
+}
+
+/* Panel: section counts, and the row of buttons that opens each pane. */
+.trynalist-section-count {
+	font-size: var(--font-smallest);
+	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+	padding: 0 4px;
+}
+.trynalist-pane-launcher {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px 6px 6px;
+	flex-wrap: wrap;
+}
+.trynalist-pane-launch {
+	background: none;
+	border: none;
+	box-shadow: none;
+	padding: 3px;
+	cursor: pointer;
+	color: var(--text-faint);
+	border-radius: var(--radius-s);
+}
+.trynalist-pane-launch:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.trynalist-pane-launch .svg-icon { width: 15px; height: 15px; }
+
+/* Rendered notes: Obsidian's block wrappers carry document-level margins, so a
+   three-item list picked up a blank line above it and between every item. This
+   is a note, not a page — tighten it back to list spacing. */
+.trynalist-note > div[class^="el-"] { margin: 0; }
+.trynalist-note p { margin: 0 0 0.25em; }
+.trynalist-note p:last-child { margin-bottom: 0; }
+.trynalist-note ul,
+.trynalist-note ol { margin: 0.15em 0; padding-inline-start: 1.4em; }
+.trynalist-note li { margin: 0; }
+.trynalist-note li > p { margin: 0; display: inline; }
+.trynalist-note li > ul,
+.trynalist-note li > ol { margin: 0; }
+.trynalist-note blockquote { margin: 0.25em 0; }
+.trynalist-note h1, .trynalist-note h2, .trynalist-note h3,
+.trynalist-note h4, .trynalist-note h5, .trynalist-note h6 { margin: 0.3em 0 0.15em; }
+.trynalist-note hr { margin: 0.5em 0; }
+
+/* Mind map scrolling must stay INSIDE the map. Without an explicit height the
+   scroller grows to fit the canvas and the page scrolls instead, taking the
+   breadcrumb and the view switcher out of view with it. */
+.trynalist-mindmap-host { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.trynalist-mindmap {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+	overflow: hidden;
+}
+.trynalist-mindmap-bar { flex: 0 0 auto; }
+.trynalist-mindmap-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	overscroll-behavior: contain;
+}
+/* The document view itself must not scroll while the map owns the scrolling. */
+.is-mindmap { display: flex; flex-direction: column; overflow: hidden; }
+.trynalist-mindmap-node { max-height: 140px; overflow: auto; }
+
+/* The zoomed-into item, shown as an editable row above its children. */
+.trynalist-zoom-root {
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding-bottom: 4px;
+	margin-bottom: 4px;
+}
+
+/* A link to another Trynalist document: a chip with the outline icon, not an
+   unresolved file embed. */
+.trynalist-doc-chip { display: inline-flex; align-items: center; gap: 3px; }
+.trynalist-doc-chip-icon { display: inline-flex; }
+.trynalist-doc-chip-icon .svg-icon { width: 13px; height: 13px; }
+
+
+/* A fenced block and its header strip share a shrink-to-fit box, so the strip
+   is as wide as the code rather than as wide as the note. */
+.trynalist-code-wrap {
+	display: inline-block;
+	min-width: min(100%, 16em);
+	max-width: 100%;
+	vertical-align: top;
+}
+.trynalist-code-wrap > pre { margin-top: 0; }
+.trynalist-code-bar { box-sizing: border-box; width: 100%; }
+
+/* Rows being dragged over during a drag-select. */
+.trynalist-row.is-selected { background: var(--text-selection); }

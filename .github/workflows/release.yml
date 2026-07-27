@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: ["manifest.json"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the version from the manifest
+        id: v
+        run: echo "tag=$(jq -r .version manifest.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Tag, release, and upload the assets BRAT needs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — nothing to do."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          NOTES_FILE="release-notes/${TAG}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            gh release create "$TAG" --title "$TAG" --notes-file "$NOTES_FILE"
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+          # BRAT reads these as individual assets, not from a source archive.
+          gh release upload "$TAG" main.js manifest.json styles.css --clobber
