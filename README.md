@@ -1,77 +1,63 @@
 # Trynalist
 
-A Dynalist-style outliner for Obsidian. Every line of an outline is a real
-Markdown note in your vault, so nothing is locked inside the plugin.
+A Dynalist-style outliner for Obsidian — database-first: every outline line is a real Markdown note in your vault, so nothing is locked inside the plugin.
 
-> **Beta.** This is distributed for testing through BRAT and is not in the
-> Obsidian community plugin store. Expect rough edges, and keep backups of any
-> vault you try it in.
+## How it works
 
-## Installing with BRAT
+- Documents live under a root folder (default `Trynalist/`), one subfolder per document.
+- Each line of an outline is one Markdown file. Its frontmatter carries the structure: unique `id`, `parent` link, fractional `order` among siblings, authored `indent`, normalized `depth` (distance from the doc root), `created`/`modified` timestamps, plus item state (`checked`, `checklist`, `collapsed`, `heading`, `color`).
+- The file body is the line itself (first line) and the item's note (everything after).
+- A `<Doc>.trynalist` manifest file identifies each document; clicking it (in the Trynalist panel or the file explorer) opens the outline editor.
+- Export produces `<Doc>.trynalist.zip` containing `outline.md` (a readable nested-bullet Markdown outline) and `meta.json` (lossless node metadata).
 
-1. Install the **BRAT** plugin from Obsidian's community plugins.
-2. In BRAT's settings, choose **Add beta plugin**.
-3. Paste `grub-basket/Trynalist`.
-4. Enable **Trynalist** in Community plugins.
+## Using it
 
-BRAT will pick up new releases as they are published.
+- Open the **Trynalist panel** (ribbon icon or command) to list and create documents.
+- In the editor: **Enter** new item · **Tab / Shift+Tab** indent/outdent · **Alt+↑/↓** move item · **Cmd/Ctrl+Enter** toggle complete · **Shift+Enter** edit the item's note (and again to come back) · **Alt+Enter** line break inside an item · **Backspace** on an empty item deletes it · click a **bullet** to collapse, the **magnifier** beside it to zoom in, breadcrumbs to zoom out.
+- Views: outline, flat, article and **mind map**. The mind map is read-only — drag the background to pan, and click a node for its breadcrumb trail.
 
-## What it does
-
-- **Documents** live under a root folder (`Trynalist/` by default), one
-  subfolder per document, identified by a `<Doc>.trynalist` manifest.
-- **Every outline line is one Markdown file.** Its frontmatter carries the
-  structure: a unique `id`, a `parent` link, a fractional `order` among
-  siblings, the authored `indent`, a normalised `depth`, timestamps, and item
-  state (checkbox, collapsed, heading level, colour, due date).
-- **The file body is the line and its note** — first line is the item, the rest
-  is the note underneath it.
-- **Four views**: outline, flat, article, and a read-only mind map.
-- **Notes render as real Markdown** through Obsidian's own renderer, so fenced
-  code gets syntax highlighting and a copy button, and tables, callouts, math
-  and embeds all work.
-- **Mirrors and portals**: show a subtree from elsewhere — including another
-  document — as a read-only window.
-- **Import** from Dynalist OPML, Dynalist JSON, or indented text. **Export** to
-  a `.trynalist.zip` holding a readable Markdown outline plus lossless metadata.
-
-Deleted items go to the vault trash. They are never hard-deleted.
-
-## Keyboard
-
-**Enter** new item · **Tab / Shift+Tab** indent and outdent · **Alt+↑/↓** move
-an item · **Cmd/Ctrl+Enter** toggle complete · **Shift+Enter** edit the item's
-note, and again to come back · **Alt+Enter** line break inside an item ·
-**Backspace** on an empty item deletes it.
-
-Click a **bullet** to collapse, the **magnifier** beside it to zoom in, and the
-breadcrumbs to zoom back out. Every command is rebindable in Obsidian's hotkey
-settings, and every one is scoped to a Trynalist document — with an ordinary
-note focused, the same chord does whatever Obsidian normally does.
+Deleted items go to the vault trash, never hard-deleted.
 
 ## Where this differs from Dynalist
 
-Trynalist aims at parity, and most of it is parity. The deliberate departures:
+Trynalist aims at parity, and most of it is parity. These are the deliberate
+departures — each one is a place where Dynalist's limit came from its own
+storage or its pricing, not from anything that would make the outliner better.
 
-- **Six heading levels instead of three.** Items are Markdown rendered by
-  Obsidian, which already has H1–H6; capping at three would have removed levels
-  that work. Documents imported from Dynalist are unaffected.
-- **The bullet collapses and a magnifier zooms**, as in Dynalist, and the
-  preference that swaps them is here too. When the bullet is set to zoom, it
-  turns into a magnifier on hover so the two controls never look identical.
-- **No sharing, publishing, or accounts.** Documents are files in your vault,
-  so Obsidian Sync, Git, or any folder-sharing tool already covers it.
-- **Attachments live beside their document**, so moving, exporting or converting
-  one takes its files along.
-- **Nothing is paywalled.** Several of these were Dynalist Pro features.
-- **Dynalist's themes are not included.** Trynalist inherits your Obsidian
-  theme. The per-item colour swatches are here; the whole-app themes are not.
+**Six heading levels instead of three.** Dynalist offered H1–H3. Our items are
+Markdown files rendered by Obsidian, which has H1–H6 already, so capping at
+three would have meant *removing* levels that work. Cycling wraps around at
+six. A document written in Dynalist still imports exactly as it was — H1–H3
+are simply the first three stops.
 
-## Status
+**The two hover controls can swap, and the swap is visible.** Dynalist's
+default is that the **bullet collapses** and a **magnifier beside it zooms**;
+Preferences → Control swaps them. We match that default and that preference,
+with one addition: when the bullet is set to zoom, the bullet itself turns into
+a magnifier on hover, so the two icons never both claim to do the same thing.
+Hovering a bullet with nothing under it shows a muted dot rather than going
+blank.
 
-Mirrors are read-only for now: editing through one means writing into another
-document, and undo would have to span both. The read-only window works today.
+**No sharing, no publishing, no accounts.** Everything network-shaped is out of
+scope — your documents are files in your vault, so Obsidian Sync, Git, or any
+folder-sharing tool already does that job.
 
-## Licence
+**Attachments live beside their document**, in the document's own
+`_attachments` folder, rather than in one central store. Moving, exporting or
+converting a document takes its files with it.
 
-MIT.
+**Tags, search and the item finder are not paywalled.** Several of these were
+Dynalist Pro features. There is no Pro here.
+
+**Markdown is real Markdown.** Notes are rendered by Obsidian itself, so fenced
+code gets syntax highlighting and a copy button, and tables, callouts, math and
+embeds all work. Dynalist supported a fixed subset of inline formatting.
+
+**Dynalist's themes are not included.** Trynalist inherits whatever Obsidian
+theme you already use, so it matches the rest of your vault rather than bringing
+its own colour schemes. The per-item colour swatches from Dynalist ARE here;
+it is the whole-app themes that are not.
+
+**Auto-pairing while typing** (brackets and formatting marks, wrapping a
+selection) is an Obsidian/VS Code convention Dynalist did not have. It can be
+turned off in settings.

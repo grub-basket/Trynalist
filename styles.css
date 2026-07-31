@@ -1032,3 +1032,63 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 
 /* Rows being dragged over during a drag-select. */
 .trynalist-row.is-selected { background: var(--text-selection); }
+
+/* ── Blocks inside a rendered note ───────────────────────────────────────
+   These come from Obsidian's renderer, styled for a full-width page. Dropped
+   into an outline they stretch the whole pane: on a 1876px window a note's
+   horizontal rule and callouts ran the entire width while the text beside
+   them was 400px. Constrain them to a readable column. */
+.trynalist-note hr,
+.trynalist-note .callout,
+.trynalist-note table,
+.trynalist-note blockquote,
+.trynalist-note .trynalist-code-wrap {
+	max-width: min(100%, 46em);
+}
+
+/* Nested block wrappers carry page margins too, not just the direct children. */
+.trynalist-note div[class^="el-"] { margin: 0; }
+
+/* Display maths was centred across the whole pane with page-sized padding, so
+   a note's equation floated far from its own text. */
+.trynalist-note .math-block,
+.trynalist-note mjx-container[display="true"] {
+	display: block;
+	margin: 0.3em 0;
+	text-align: left;
+}
+.trynalist-note mjx-container[display="true"] > mjx-math { margin: 0 !important; }
+
+/* Blockquotes lost every cue — no bar, no indent, and the lines drifted apart.
+   The earlier margin reset went too far. */
+.trynalist-note blockquote {
+	margin: 0.3em 0;
+	padding: 0.1em 0 0.1em 0.8em;
+	border-left: 2px solid var(--interactive-accent);
+	color: var(--text-muted);
+}
+.trynalist-note blockquote blockquote { margin-top: 0.2em; }
+
+/* Tables had no borders or cell padding at all. */
+.trynalist-note table { border-collapse: collapse; }
+.trynalist-note th,
+.trynalist-note td {
+	border: 1px solid var(--background-modifier-border);
+	padding: 2px 8px;
+}
+.trynalist-note th { background: var(--background-secondary); }
+
+/* The header strip was grey against a transparent block, so it read as a
+   floating label rather than the top of the code. */
+.trynalist-code-wrap > pre {
+	background: var(--background-secondary);
+	border-radius: 0 0 var(--radius-s) var(--radius-s);
+	padding: 6px 10px;
+	margin-bottom: 0;
+	overflow-x: auto;
+}
+.trynalist-code-wrap > pre > code { background: none; }
+
+/* A hard break (two trailing spaces) became separate paragraphs with page
+   spacing between them. */
+.trynalist-note br { line-height: 1; }
