@@ -45,7 +45,16 @@ note, and again to come back · **Alt+Enter** line break inside an item ·
 **Backspace** on an empty item deletes it.
 
 Click a **bullet** to collapse, the **magnifier** beside it to zoom in, and the
-breadcrumbs to zoom back out. Every command is rebindable in Obsidian's hotkey
+breadcrumbs to zoom back out.
+
+**Dynalist's chords are the defaults**, including `Mod+A` (select one level up),
+`Mod+F` (search this document), `Mod+↑/↓` (move an item) and `Mod+]` / `Mod+[`
+(zoom in and out). They are safe to claim because every Trynalist command fires
+only while the keyboard is genuinely inside a Trynalist document — with a
+sidebar, a search box or another plugin's pane focused, the same chord does
+whatever it normally would. Clear any of them in Obsidian's hotkey settings if
+you would rather keep the chord for something else.
+ Every command is rebindable in Obsidian's hotkey
 settings, and every one is scoped to a Trynalist document — with an ordinary
 note focused, the same chord does whatever Obsidian normally does.
 
