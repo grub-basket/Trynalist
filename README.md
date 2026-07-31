@@ -72,13 +72,6 @@ Trynalist aims at parity, and most of it is parity. The deliberate departures:
 Honest list of Dynalist behaviour that is not here, beyond the deliberate
 departures above.
 
-- **`Alt+Enter` — a line break inside an item — does not work on macOS.** The
-  command is registered and the action itself is correct, but the key press
-  appears never to reach the plugin; the likely cause is that macOS treats
-  Option as a text-input modifier and consumes the chord first. **Use the note
-  instead:** `Shift+Enter` moves into an item's note, `Enter` there makes
-  ordinary new lines, and `Shift+Enter` brings you back. `Mod+Shift+Enter` is
-  bound to the same action and does work.
 - **Dynalist's themes.** Trynalist uses your Obsidian theme; see above.
 - **Sharing, publishing, and accounts.** Out of scope by design.
 
