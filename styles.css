@@ -189,8 +189,11 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 	outline: none;
-	white-space: pre-wrap;
 }
+/* Raw source needs its line breaks preserved; rendered markdown must NOT be
+   pre-wrap, or every whitespace text node between block elements becomes a
+   visible line box — the source of the persistent phantom blank lines. */
+.trynalist-note:not([data-rendered="1"]) { white-space: pre-wrap; }
 .trynalist-empty-hint {
 	color: var(--text-muted);
 	margin-top: 16px;
@@ -496,7 +499,11 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 }
 .trynalist-date:hover { background: var(--background-modifier-hover); }
 .trynalist-date.is-overdue {
-	background: var(--background-modifier-error, rgba(255, 80, 80, 0.18));
+	/* NOT --background-modifier-error: that is a solid destructive-button red
+	   in most themes, and with --text-error also red the chip was an unreadable
+	   solid pill. A translucent tint of the theme's red keeps the text legible
+	   in both light and dark. */
+	background: rgba(var(--color-red-rgb, 255, 80, 80), 0.15);
 	color: var(--text-error);
 }
 .trynalist-date-preview {
@@ -1052,10 +1059,13 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 /* Display maths was centred across the whole pane with page-sized padding, so
    a note's equation floated far from its own text. */
 .trynalist-note .math-block,
-.trynalist-note mjx-container[display="true"] {
-	display: block;
-	margin: 0.3em 0;
-	text-align: left;
+.trynalist-note mjx-container[display="true"],
+.trynalist-note mjx-container[jax="CHTML"][display="true"] {
+	display: block !important;
+	margin: 0.3em 0 !important;
+	/* !important: MathJax injects its own stylesheet after ours and its
+	   text-align: center wins the specificity tie otherwise. */
+	text-align: left !important;
 }
 .trynalist-note mjx-container[display="true"] > mjx-math { margin: 0 !important; }
 
