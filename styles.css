@@ -1102,3 +1102,32 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 /* A hard break (two trailing spaces) became separate paragraphs with page
    spacing between them. */
 .trynalist-note br { line-height: 1; }
+
+/* Flat view: the indentation level, which flattening otherwise hides. */
+.trynalist-flat-depth {
+	display: inline-block;
+	min-width: 22px;
+	margin-right: 6px;
+	padding: 0 4px;
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-border);
+	color: var(--text-faint);
+	font-size: var(--font-smallest);
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+	vertical-align: 1px;
+}
+
+/* Created / modified: values right-aligned and monospaced so they line up. */
+.trynalist-stamp-grid {
+	display: grid;
+	grid-template-columns: auto auto;
+	gap: 1px 12px;
+	align-items: baseline;
+}
+.trynalist-stamp-label { color: var(--text-faint); }
+.trynalist-stamp-value {
+	font-family: var(--font-monospace);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
