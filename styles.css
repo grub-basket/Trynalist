@@ -1131,3 +1131,43 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	font-variant-numeric: tabular-nums;
 	text-align: right;
 }
+
+/* A block-selected row must read as SELECTED even while it still holds focus.
+   The focus highlight is a plain hover-grey and was painted by :focus-within,
+   which beat the selection colour — so the row your cursor was in looked
+   unselected until you clicked away, even though it WAS in the selection. */
+.tl-highlight-current .trynalist-row.is-selected:focus-within {
+	background: var(--text-selection);
+}
+
+/* New document / new folder: half the default modal width, but expressed in em
+   so it grows with Obsidian's text size and UI zoom rather than pinning to a
+   pixel count that would crop at larger scales. */
+.trynalist-compact-modal {
+	width: min(26em, 90vw);
+	max-width: 90vw;
+}
+
+/* Extra actions in the search bar. */
+.trynalist-search-action {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 6px;
+	background: none;
+	border: none;
+	box-shadow: none;
+	cursor: pointer;
+	color: var(--text-faint);
+	border-radius: var(--radius-s);
+}
+.trynalist-search-action:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.trynalist-search-action .svg-icon { width: 15px; height: 15px; }
+
+/* "Show in panel" flashes the row it scrolled to. */
+.trynalist-doc-row.is-flashing {
+	animation: trynalist-flash 1.4s ease-out;
+}
+@keyframes trynalist-flash {
+	0%, 40% { background: var(--text-selection); }
+	100% { background: transparent; }
+}
