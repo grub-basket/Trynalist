@@ -1171,3 +1171,10 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	0%, 40% { background: var(--text-selection); }
 	100% { background: transparent; }
 }
+
+/* Trynalist's own text scale — independent of Obsidian's UI zoom, so an
+   outliner can be denser or larger than the notes beside it. Applied as a
+   multiplier on the container's font-size, which everything inside inherits. */
+.trynalist-doc {
+	font-size: calc(var(--font-text-size, 16px) * var(--trynalist-scale, 1));
+}
