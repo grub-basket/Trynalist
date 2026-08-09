@@ -54,9 +54,6 @@ only while the keyboard is genuinely inside a Trynalist document — with a
 sidebar, a search box or another plugin's pane focused, the same chord does
 whatever it normally would. Clear any of them in Obsidian's hotkey settings if
 you would rather keep the chord for something else.
- Every command is rebindable in Obsidian's hotkey
-settings, and every one is scoped to a Trynalist document — with an ordinary
-note focused, the same chord does whatever Obsidian normally does.
 
 ## Where this differs from Dynalist
 
