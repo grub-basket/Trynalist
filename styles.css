@@ -1178,3 +1178,20 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 .trynalist-doc {
 	font-size: calc(var(--font-text-size, 16px) * var(--trynalist-scale, 1));
 }
+
+/* Back / forward within a document — zoom and view, which Obsidian's own
+   arrows know nothing about. */
+.trynalist-nav { display: inline-flex; gap: 2px; margin-right: 6px; }
+.trynalist-nav-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	cursor: pointer;
+}
+.trynalist-nav-btn:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.trynalist-nav-btn.is-disabled { opacity: 0.35; pointer-events: none; }
+.trynalist-nav-btn .svg-icon { width: 15px; height: 15px; }
