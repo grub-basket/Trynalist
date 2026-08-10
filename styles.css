@@ -1181,17 +1181,20 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 
 /* Back / forward within a document — zoom and view, which Obsidian's own
    arrows know nothing about. */
-.trynalist-nav { display: inline-flex; gap: 2px; margin-right: 6px; }
+/* Left of the breadcrumb trail, before the document title. */
+.trynalist-nav { display: inline-flex; gap: 2px; margin-right: 8px; order: -1; }
 .trynalist-nav-btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 22px;
-	height: 22px;
+	/* Matched to the view-switcher buttons beside them, so the bar reads as one
+	   row of controls rather than two sizes of button. */
+	width: 26px;
+	height: 26px;
 	border-radius: var(--radius-s);
 	color: var(--text-faint);
 	cursor: pointer;
 }
 .trynalist-nav-btn:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
 .trynalist-nav-btn.is-disabled { opacity: 0.35; pointer-events: none; }
-.trynalist-nav-btn .svg-icon { width: 15px; height: 15px; }
+.trynalist-nav-btn .svg-icon { width: 17px; height: 17px; }
