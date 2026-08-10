@@ -1286,3 +1286,50 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 /* Live filter on each pane. */
 .trynalist-pane-filter { width: 100%; margin: 2px 0 6px; }
 .trynalist-filtered-out { display: none !important; }
+
+/* The bookmark star: always visible, filled only when THIS view is bookmarked. */
+.trynalist-star {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	margin-left: 4px;
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	cursor: pointer;
+}
+.trynalist-star:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.trynalist-star.is-on { color: var(--interactive-accent); }
+.trynalist-star .svg-icon { width: 16px; height: 16px; }
+
+/* Notification toast — the structure Stashpad settled on: a left accent for the
+   kind, the message, then an action row. The toast keeps Obsidian's own
+   background so it stays theme-native. */
+.trynalist-notice {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-left: 8px;
+	border-left: 3px solid transparent;
+}
+.trynalist-notice-info    { border-left-color: var(--text-muted); }
+.trynalist-notice-success { border-left-color: var(--color-green, #44d07b); }
+.trynalist-notice-warning { border-left-color: var(--color-orange, #e8a25a); }
+.trynalist-notice-error   { border-left-color: var(--color-red, #e25c4c); }
+.trynalist-notice-message { white-space: pre-wrap; line-height: 1.4; }
+.trynalist-notice-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+/* interactive-* tokens, NOT hover modifiers: those resolved to near-black on
+   some light themes and made the button text unreadable. */
+.trynalist-notice-action {
+	background: var(--interactive-normal);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	padding: 4px 10px;
+	font-size: var(--font-ui-smaller);
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 80ms ease;
+}
+.trynalist-notice-action:hover { background: var(--interactive-hover); color: var(--text-normal); }
