@@ -1198,3 +1198,21 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 .trynalist-nav-btn:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
 .trynalist-nav-btn.is-disabled { opacity: 0.35; pointer-events: none; }
 .trynalist-nav-btn .svg-icon { width: 17px; height: 17px; }
+
+/* The breadcrumb bar — nav buttons, title, view switcher — stays put while the
+   outline scrolls under it. Reaching for Back should not mean scrolling to the
+   top of a long document first. */
+.trynalist-doc .trynalist-crumbs {
+	position: sticky;
+	top: 0;
+	z-index: 5;
+	background: var(--background-primary);
+	padding-bottom: 4px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+.trynalist-doc .trynalist-search {
+	position: sticky;
+	top: 2.2em;
+	z-index: 4;
+	background: var(--background-primary);
+}
