@@ -53,10 +53,22 @@
 }
 .trynalist-row {
 	display: flex;
-	align-items: center;
+	/* Aligned to the first line, as Dynalist does. Centring put the bullet
+	   halfway down a multi-line item, which reads as belonging to no line in
+	   particular. The controls keep their own line-height so they sit on the
+	   first line's optical centre. */
+	align-items: flex-start;
 	gap: 3px;
 	padding: 2px 0;
 	min-height: 26px;
+}
+.trynalist-row > .trynalist-menu-handle,
+.trynalist-row > .trynalist-rowaction,
+.trynalist-row > .trynalist-collapse,
+.trynalist-row > .trynalist-bullet,
+.trynalist-row > .trynalist-check {
+	flex: 0 0 auto;
+	margin-top: 1px;
 }
 .trynalist-collapse {
 	width: 20px;
@@ -1216,3 +1228,61 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	z-index: 4;
 	background: var(--background-primary);
 }
+
+
+/* Callouts inside a note carried page-sized spacing above and below. */
+.trynalist-note .callout {
+	margin: 0.3em 0;
+	padding: 0.5em 0.75em;
+}
+.trynalist-note .callout-title { padding: 0; }
+.trynalist-note .callout-content { margin-top: 0.2em; }
+.trynalist-note .callout-content > :last-child { margin-bottom: 0; }
+
+/* Zoomed in: the item you zoomed to is the heading of what you are looking at,
+   so it gets a larger face, and its children indent beneath it. Previously the
+   zoom root and its first children lined up, which said they were siblings. */
+.trynalist-zoom-root .trynalist-text {
+	font-size: 1.35em;
+	font-weight: var(--font-semibold);
+	line-height: 1.3;
+}
+.trynalist-list.is-outline > .trynalist-zoom-root + .trynalist-item,
+.trynalist-list.is-outline > .trynalist-zoom-root ~ .trynalist-item {
+	padding-left: 16px;
+}
+
+/* Heading and colour pickers as a row inside the item menu. */
+.trynalist-menu-grid {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 10px;
+}
+.trynalist-menu-grid-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	min-width: 52px;
+}
+.trynalist-menu-grid-row { display: flex; gap: 3px; }
+.trynalist-menu-choice {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 22px;
+	height: 22px;
+	padding: 0 4px;
+	border-radius: var(--radius-s);
+	border: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+.trynalist-menu-choice:hover { background: var(--background-modifier-hover); }
+.trynalist-menu-choice.is-current {
+	border-color: var(--interactive-accent);
+	box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+
+/* Live filter on each pane. */
+.trynalist-pane-filter { width: 100%; margin: 2px 0 6px; }
+.trynalist-filtered-out { display: none !important; }
