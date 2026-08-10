@@ -72,6 +72,17 @@ Trynalist aims at parity, and most of it is parity. The deliberate departures:
 - **Nothing is paywalled.** Several of these were Dynalist Pro features.
 - **Dynalist's themes are not included.** Trynalist inherits your Obsidian
   theme. The per-item colour swatches are here; the whole-app themes are not.
+- **An item's text and its note render differently.** A note gets Obsidian's full
+  Markdown — blocks, tables, callouts, fenced code, embeds. An item's own text
+  gets inline formatting only: bold, italic, highlight, strikethrough, code,
+  maths, links, tags, dates, sub- and superscript. A blockquote or a table typed
+  into an item stays exactly as you typed it.
+
+  This is deliberate. An item is one line, while those constructs are multi-line
+  by definition — rendering them in a row would make a row sometimes a line and
+  sometimes a block container, and the bullet position, row height, drag targets
+  and cursor behaviour all depend on a row being a line. `Shift+Enter` puts you
+  in the note, which handles all of it.
 
 ## Didn't make it across
 
