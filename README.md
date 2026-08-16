@@ -3,6 +3,8 @@
 A Dynalist-style outliner for Obsidian. Every line of an outline is a real
 Markdown note in your vault, so nothing is locked inside the plugin.
 
+*Trynalist*, short for **Tryin' to make an Obsidian plugin based on Dynalist**.
+
 > **Beta.** This is distributed for testing through BRAT and is not in the
 > Obsidian community plugin store. Expect rough edges, and keep backups of any
 > vault you try it in.

@@ -47,9 +47,23 @@
 
 .trynalist-item { position: relative; }
 .trynalist-children {
-	margin-left: 22px;
-	border-left: 1px solid var(--background-modifier-border);
+	/* 31, not 22. The indent and the guide offset below are ONE decision.
+	   Widening the gap between the handle and the zoom button does nothing on
+	   its own: the bullet is positioned after that gap, so the line — which is
+	   anchored to the bullet — moves with it and stays 6px inside the button
+	   whatever the gap becomes. Only indenting children shifts a child row
+	   relative to a line anchored to its PARENT. */
+	margin-left: 31px;
 	padding-left: 6px;
+	/* The line is NOT this box's left border. The border sits at the box edge,
+	   which lands in the middle of a row's control gutter — looking one outdent
+	   out of place. It is drawn by .trynalist-guide instead, offset here.
+
+	   31px = the parent bullet's centre (handle 22 + gap 6 + action 20 + gap 3
+	   + half a bullet 11 = 62) less this box's own 31px margin. That puts the
+	   line at offset 25 inside a child row: the middle of its 22-28 gap, clear
+	   of the handle and the zoom button by 3px each side. */
+	--tl-guide-x: 31px;
 }
 .trynalist-row {
 	display: flex;
@@ -84,6 +98,16 @@
 	flex: 0 0 auto;
 }
 .trynalist-collapse .svg-icon { width: 14px; height: 14px; }
+/* A wider gap after the menu handle, so the guide line has somewhere to land
+   that is not on top of a control. Paired with the children indent above —
+   neither works alone.
+
+   The +2/-2 pair moves the zoom button 2px toward the bullet while leaving the
+   BULLET where it is. That matters: the guide line is anchored to the bullet's
+   centre, so shifting the bullet would drag the line back onto a control and
+   undo the clearance. Taking the 2px from the gap after the button instead
+   keeps the row's total width identical. */
+.trynalist-row > .trynalist-menu-handle { margin-right: 3px; }
 /* The second hover icon beside the menu: magnifier (zoom) by default, or +/-
    when the bullet has been set to zoom instead. */
 .trynalist-rowaction {
@@ -101,8 +125,11 @@
 }
 .trynalist-rowaction .svg-icon { width: 14px; height: 14px; }
 .trynalist-rowaction.is-empty { pointer-events: none; }
-.trynalist-row:hover .trynalist-rowaction,
-.trynalist-row:focus-within .trynalist-rowaction { opacity: 1; }
+/* Hover only. Keeping it visible on the focused row meant the item you were
+   typing in always carried a magnifier — and it sat on the guide line. Touch
+   has no hover, so mobile keeps the focus fallback. */
+.trynalist-row:hover .trynalist-rowaction { opacity: 1; }
+.is-mobile .trynalist-row:focus-within .trynalist-rowaction { opacity: 1; }
 .trynalist-rowaction:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
 .trynalist-collapse:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
 /* Nothing to collapse: keep the width for alignment, but no box and no hover. */
@@ -318,13 +345,24 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	vertical-align: -1px;
 	border: 1px solid var(--background-modifier-border);
 }
-.tl-swatch-0 { background: transparent; }
-.tl-swatch-1 { background: rgb(255, 106, 106); }
-.tl-swatch-2 { background: rgb(255, 168, 76); }
-.tl-swatch-3 { background: rgb(255, 220, 90); }
-.tl-swatch-4 { background: rgb(112, 200, 120); }
-.tl-swatch-5 { background: rgb(96, 170, 255); }
-.tl-swatch-6 { background: rgb(190, 130, 255); }
+/* Held in a custom property rather than set directly, so the hover rule below
+   can restore the swatch's own colour. Plain `background` here loses to
+   `.trynalist-menu-choice:hover`, which wiped the very colour the swatch
+   exists to show. */
+/* Two strengths per colour. `--tl-swatch` is the colour itself, used for the
+   ring so the swatch stays identifiable at 22px; `--tl-swatch-soft` is the
+   translucent fill, close to what applying the colour actually puts behind a
+   row. Held in custom properties rather than set directly so the hover rule
+   below can restore them — a plain `background` here loses to
+   `.trynalist-menu-choice:hover`, which wiped the very colour the swatch
+   exists to show. */
+.tl-swatch-0 { --tl-swatch: transparent; --tl-swatch-soft: transparent; }
+.tl-swatch-1 { --tl-swatch: rgb(255, 106, 106); --tl-swatch-soft: rgba(255, 106, 106, 0.25); }
+.tl-swatch-2 { --tl-swatch: rgb(255, 168, 76); --tl-swatch-soft: rgba(255, 168, 76, 0.25); }
+.tl-swatch-3 { --tl-swatch: rgb(255, 220, 90); --tl-swatch-soft: rgba(255, 220, 90, 0.28); }
+.tl-swatch-4 { --tl-swatch: rgb(112, 200, 120); --tl-swatch-soft: rgba(112, 200, 120, 0.25); }
+.tl-swatch-5 { --tl-swatch: rgb(96, 170, 255); --tl-swatch-soft: rgba(96, 170, 255, 0.25); }
+.tl-swatch-6 { --tl-swatch: rgb(190, 130, 255); --tl-swatch-soft: rgba(190, 130, 255, 0.28); }
 
 /* Multi-select */
 .trynalist-row.is-selected {
@@ -639,8 +677,6 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 .trynalist-agenda-row { align-items: flex-start; padding: 6px 10px; }
 .trynalist-agenda-body { flex: 1; min-width: 0; }
 .trynalist-agenda-row.is-overdue .trynalist-row-icon { color: var(--text-error); }
-.trynalist-notice-line { margin-top: 4px; }
-.trynalist-notice-line button { margin-right: 6px; }
 
 /* View switcher + flat / article presentations */
 .trynalist-view-switch {
@@ -1037,6 +1073,28 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 .trynalist-doc-chip-icon { display: inline-flex; }
 .trynalist-doc-chip-icon .svg-icon { width: 13px; height: 13px; }
 
+/* Leading icon on a date or file chip, where Dynalist puts it. The chip has to
+   become a flex box for the icon to sit on the text's centre line rather than
+   its baseline, which is what left it riding low on multi-line rows. */
+.trynalist-date,
+.trynalist-file-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25em;
+}
+.trynalist-chip-icon {
+	display: inline-flex;
+	align-items: center;
+	/* Slightly dimmer than the label: the icon marks the KIND of chip, the text
+	   carries the content. */
+	opacity: 0.75;
+	flex: 0 0 auto;
+}
+.trynalist-chip-icon .svg-icon {
+	width: 0.9em;
+	height: 0.9em;
+}
+
 
 /* A fenced block and its header strip share a shrink-to-fit box, so the strip
    is as wide as the code rather than as wide as the note. */
@@ -1278,6 +1336,28 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	cursor: pointer;
 }
 .trynalist-menu-choice:hover { background: var(--background-modifier-hover); }
+/* A letter per colour swatch — it previews how a glyph sits on the colour.
+   Decorative: the accessible name is the colour, set as aria-label. */
+.trynalist-menu-choice[class*="tl-swatch-"]:not(.tl-swatch-0) {
+	/* Inherits the theme's text colour rather than being pinned to white, so it
+	   flips with light and dark the way Dynalist's does. This is also the only
+	   version that is an honest preview: applying a colour puts a pale tint
+	   BEHIND normal text, so the glyph you see here is the glyph you get. */
+	color: var(--text-normal);
+	font-weight: 600;
+	/* Translucent fill + full-strength ring. Pinning the letter to white read at
+	   1.3:1 on yellow; inheriting the text colour over the FULL colour fixed
+	   light mode (5.7–11.9) but broke dark, where light text on a light pastel
+	   measured 1.0–2.0. Over the tint both modes clear 4.5:1, because the fill
+	   composites against whatever is behind it. */
+	background: var(--tl-swatch-soft);
+	border-color: var(--tl-swatch);
+}
+/* Keep the swatch's colour while hovering it; only lift it slightly. */
+.trynalist-menu-choice[class*="tl-swatch-"]:not(.tl-swatch-0):hover {
+	background: var(--tl-swatch-soft);
+	filter: brightness(1.12);
+}
 .trynalist-menu-choice.is-current {
 	border-color: var(--interactive-accent);
 	box-shadow: inset 0 0 0 1px var(--interactive-accent);
@@ -1333,3 +1413,516 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	transition: background 80ms ease;
 }
 .trynalist-notice-action:hover { background: var(--interactive-hover); color: var(--text-normal); }
+/* Was missing from the port: without it the button can hold keyboard focus
+   with nothing on screen saying so. */
+.trynalist-notice-action:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+
+/* ── Mobile keyboard toolbar ────────────────────────────────────────────
+   A phone has no Tab, no modifier chords and no right-click, so every
+   structural action was unreachable — indenting is the whole point of an
+   outliner and there was no way to do it. Phones only; a tablet already gets
+   a desktop-shaped UI. */
+.trynalist-mobile-toolbar {
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: var(--layer-status-bar);
+	background: var(--background-secondary);
+	border-top: 1px solid var(--background-modifier-border);
+	/* Longhands only, and the inset token rather than a raw env(): the bar sits
+	   above the keyboard when one is open (bottom is set in JS) and above the
+	   home indicator when one is not. */
+	padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.trynalist-mobile-toolbar-strip {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	/* Sixteen actions cannot fit a phone's width. Scrolling beats wrapping to a
+	   second row, which would eat the little screen the outline itself has. */
+	-webkit-overflow-scrolling: touch;
+	scrollbar-width: none;
+	padding: 4px 6px;
+}
+.trynalist-mobile-toolbar-strip::-webkit-scrollbar { display: none; }
+.trynalist-mobile-tool {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	/* 40px square: below about 44px a touch target starts collecting mis-taps,
+	   and these sit shoulder to shoulder. */
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-s);
+	color: var(--text-normal);
+	box-shadow: none;
+	cursor: pointer;
+}
+.trynalist-mobile-tool:active { background: var(--background-modifier-active-hover); }
+.trynalist-mobile-tool-icon { display: inline-flex; }
+.trynalist-mobile-tool-icon .svg-icon { width: 20px; height: 20px; }
+/* Keep the last row clear of the bar. */
+.is-mobile .trynalist-doc { padding-bottom: 96px; }
+
+/* Customise-toolbar dialog: Dynalist's added / more split. */
+.trynalist-customise-head {
+	font-weight: 600;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 14px 0 6px;
+}
+.trynalist-customise-head:first-child { margin-top: 0; }
+.trynalist-customise-empty { color: var(--text-muted); padding: 6px 0; }
+.trynalist-customise-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+.trynalist-customise-icon { display: inline-flex; color: var(--text-muted); }
+.trynalist-customise-icon .svg-icon { width: 16px; height: 16px; }
+.trynalist-customise-label { flex: 1; }
+.trynalist-customise-moves { display: flex; gap: 2px; }
+.trynalist-customise-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	/* Same 40px target as the toolbar itself — this screen is used on a phone. */
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--text-muted);
+	cursor: pointer;
+	border-radius: var(--radius-s);
+}
+.trynalist-customise-btn:hover { background: var(--background-modifier-hover); }
+.trynalist-customise-btn .svg-icon { width: 18px; height: 18px; }
+.trynalist-customise-btn.is-remove { color: var(--color-red, #e25c4c); }
+.trynalist-customise-btn.is-add { color: var(--color-green, #44d07b); }
+.trynalist-customise-foot {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+/* Mod+K command bar rows. */
+.trynalist-command-row { display: flex; align-items: center; gap: 10px; }
+.trynalist-command-icon { display: inline-flex; color: var(--text-muted); }
+.trynalist-command-icon .svg-icon { width: 16px; height: 16px; }
+.trynalist-command-label { flex: 1; }
+
+/* Zap: the visible way into the Mod+K action bar. */
+.trynalist-zap {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 6px;
+	padding: 2px;
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	cursor: pointer;
+}
+.trynalist-zap:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.trynalist-zap .svg-icon { width: 14px; height: 14px; }
+
+/* ── Per-document visibility popover ─────────────────────────────────── */
+.trynalist-eye {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 4px;
+	padding: 2px;
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	cursor: pointer;
+}
+.trynalist-eye:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.trynalist-eye .svg-icon { width: 14px; height: 14px; }
+
+.trynalist-visibility {
+	position: fixed;
+	z-index: var(--layer-menu);
+	min-width: 260px;
+	max-width: min(360px, calc(100vw - 16px));
+	padding: 10px 14px 14px;
+	border-radius: var(--radius-m);
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	box-shadow: var(--shadow-s);
+}
+.trynalist-visibility-section + .trynalist-visibility-section {
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+.trynalist-visibility-title {
+	font-size: var(--font-ui-smaller);
+	letter-spacing: 0.06em;
+	color: var(--text-muted);
+	margin-bottom: 6px;
+}
+/* Wraps rather than scrolls: four pills plus a "Global (1st line)" label will
+   not fit a narrow pane on one line, and a row that scrolls hides options. */
+.trynalist-visibility-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.trynalist-visibility-pill {
+	padding: 4px 10px;
+	border-radius: var(--radius-s);
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	box-shadow: none;
+}
+.trynalist-visibility-pill:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+/* The selected pill is outlined rather than filled, so "which one is on" does
+   not depend on telling two background tints apart. */
+.trynalist-visibility-pill.is-on {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+	font-weight: 500;
+}
+
+/* ── Header control cluster ──────────────────────────────────────────────
+   Zap, search, eye, star and the view switcher were four different box sizes
+   sitting in the crumb trail's inline text flow, so each aligned on the text
+   baseline rather than to the others. One flex row, one size, one icon size. */
+.trynalist-crumb-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: 8px;
+	vertical-align: middle;
+}
+.trynalist-crumb-actions .trynalist-zap,
+.trynalist-crumb-actions .trynalist-headbtn,
+.trynalist-crumb-actions .trynalist-eye,
+.trynalist-crumb-actions .trynalist-star,
+.trynalist-crumb-actions .trynalist-view-btn {
+	width: 26px;
+	height: 24px;
+	margin: 0;
+	padding: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	cursor: pointer;
+	flex: 0 0 auto;
+}
+.trynalist-crumb-actions .trynalist-zap .svg-icon,
+.trynalist-crumb-actions .trynalist-headbtn .svg-icon,
+.trynalist-crumb-actions .trynalist-eye .svg-icon,
+.trynalist-crumb-actions .trynalist-star .svg-icon,
+.trynalist-crumb-actions .trynalist-view-btn .svg-icon {
+	width: 16px;
+	height: 16px;
+}
+.trynalist-crumb-actions .trynalist-headbtn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+/* A gap before the view switcher: it is a mode picker, not another action. */
+.trynalist-crumb-actions .trynalist-view-switch { margin-left: 8px; }
+
+/* Clicking the vertical indentation line folds its parent (Outliner's idea).
+   A strip over the line rather than a hit test on the container: the children
+   fill that container, so an offsetX test would swallow clicks meant for a row
+   whenever one started near the left edge. */
+.trynalist-children { position: relative; }
+.trynalist-guide {
+	position: absolute;
+	/* Centred on the bullet: a 9px target with the 1px line down its middle. */
+	left: calc(var(--tl-guide-x) - 4px);
+	top: 0;
+	bottom: 0;
+	/* 9px. Moving the zoom button in either direction narrows the gap this has
+	   to fit between, so the nudge is tabled — see the requests log. */
+	width: 9px;
+	cursor: pointer;
+	/* ABOVE the rows. `.trynalist-item` is position:relative, so every row is a
+	   positioned element appearing LATER in DOM order — which paints over an
+	   absolutely-positioned sibling that came first. Without this the strip was
+	   never under the pointer at all: elementFromPoint at the line returned the
+	   row's zoom button, and clicking the line silently did nothing. */
+	z-index: 1;
+}
+.trynalist-guide::before {
+	content: "";
+	position: absolute;
+	left: 4px;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--background-modifier-border);
+}
+/* Hovering has to be unmistakable — a 1px line going from grey to slightly
+   less grey is not feedback. The line thickens and takes the accent colour,
+   and the strip tints, so the target reads as a target. */
+.trynalist-guide:hover::before {
+	background: var(--interactive-accent);
+	width: 3px;
+	left: 3px;
+}
+.trynalist-guide:hover { background: var(--background-modifier-hover); border-radius: var(--radius-s); }
+/* A mirror's children belong to another document, so there is nothing to fold. */
+.trynalist-guide.is-inert { cursor: default; pointer-events: none; }
+
+/* Mobile: the popover becomes a flat stack.
+   On a phone the desktop layout is mostly air — four titled sections with
+   generous padding, on a screen where the pills themselves are what you came
+   for. Same controls, tighter, and full width rather than anchored under an
+   icon that may sit near the screen edge. */
+.is-mobile .trynalist-visibility {
+	left: 8px !important;
+	right: 8px;
+	width: auto;
+	max-width: none;
+	min-width: 0;
+	padding: 8px 10px 10px;
+}
+.is-mobile .trynalist-visibility-section + .trynalist-visibility-section {
+	margin-top: 6px;
+	padding-top: 6px;
+}
+.is-mobile .trynalist-visibility-title {
+	margin-bottom: 3px;
+	font-size: var(--font-ui-smaller);
+}
+.is-mobile .trynalist-visibility-row { gap: 4px; }
+.is-mobile .trynalist-visibility-pill {
+	/* A real touch target, but the row still fits without becoming two. */
+	padding: 6px 9px;
+	min-height: 32px;
+	display: inline-flex;
+	align-items: center;
+}
+
+/* Quiet-day chips. Monday first — ISO-8601's week start, and what moment's
+   isoWeekday() counts from, so the row and the stored numbers agree. */
+.trynalist-day-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.trynalist-day-chip {
+	padding: 4px 9px;
+	min-width: 44px;
+	border-radius: var(--radius-s);
+	border: 1px solid var(--background-modifier-border);
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	box-shadow: none;
+}
+.trynalist-day-chip:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+/* Outlined rather than filled, so "on" does not rely on telling two background
+   tints apart — the same rule the visibility pills follow. */
+.trynalist-day-chip.is-on {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+	font-weight: 500;
+}
+
+/* The guide line runs at the parent bullet's centre, which is exactly where a
+   child row's hover controls sit — measured: the zoom button spans 409-429 and
+   the line is at 416. Rather than move the controls (which would leave a gap on
+   every row that has no line beside it), the controls MASK the line while they
+   are visible: the line breaks around them and closes up again afterwards.
+
+   `:not(:hover)` so the control's own hover tint still wins when the pointer is
+   actually on it — same specificity otherwise, and source order would decide. */
+.trynalist-row:hover > .trynalist-rowaction:not(:hover),
+.trynalist-row:hover > .trynalist-collapse:not(:hover) {
+	background: var(--background-primary);
+}
+/* Above the guide while visible, or raising the guide for hit-testing would
+   draw the line straight over the icon AND swallow its clicks. The guide keeps
+   every other pixel of its height; it only yields the ~20px a visible control
+   occupies, and a control is only visible while its row is hovered — which is
+   not when you are aiming at the line. */
+.trynalist-row:hover > .trynalist-rowaction,
+.trynalist-row:hover > .trynalist-collapse {
+	position: relative;
+	z-index: 2;
+}
+
+/* ── Search bar ──────────────────────────────────────────────────────── */
+.trynalist-search-box { position: relative; display: flex; align-items: center; flex: 1; }
+.trynalist-search-box input { width: 100%; padding-right: 26px; }
+.trynalist-search-clear {
+	position: absolute;
+	right: 2px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--text-faint);
+	cursor: pointer;
+}
+.trynalist-search-clear:hover { color: var(--text-normal); }
+.trynalist-search-clear .svg-icon { width: 14px; height: 14px; }
+
+/* Switching BETWEEN modes, not just back out of one. */
+.trynalist-search-modes { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+.trynalist-search-mode {
+	padding: 4px 8px;
+	border-radius: var(--radius-s);
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+	box-shadow: none;
+}
+.trynalist-search-mode:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.trynalist-search-mode.is-on {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+}
+.trynalist-search-sort {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 0 auto;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+.trynalist-search-sort select { font-size: var(--font-ui-smaller); }
+
+/* A match inside the filtered outline, and the one Mod+G is standing on. */
+.trynalist-row.is-match .trynalist-text { background: var(--text-highlight-bg); }
+.is-current-match { outline: 2px solid var(--interactive-accent); border-radius: var(--radius-s); }
+
+/* ── Global search page ──────────────────────────────────────────────── */
+.trynalist-globalsearch { padding: 16px 24px 48px; }
+.trynalist-gs-title { margin: 0 0 2px; }
+.trynalist-gs-back { margin-bottom: 14px; font-size: var(--font-ui-small); }
+.trynalist-gs-back a { cursor: pointer; }
+.trynalist-gs-key { color: var(--text-accent); margin-left: 6px; font-family: var(--font-monospace); }
+.trynalist-gs-bar { display: flex; gap: 8px; margin-bottom: 14px; }
+.trynalist-gs-bar input { flex: 1; }
+.trynalist-gs-count { margin-bottom: 10px; color: var(--text-muted); }
+
+/* One card per document, so a result is read in the outline it came from
+   rather than as a detached row. */
+.trynalist-gs-group {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: 10px 14px 12px;
+	margin-bottom: 16px;
+	position: relative;
+}
+.trynalist-gs-doc {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-medium);
+	/* Straddling the card's top border, as a legend does — it names the card
+	   rather than being its first row. */
+	position: absolute;
+	top: -0.7em;
+	background: var(--background-primary);
+	padding: 0 6px;
+	cursor: pointer;
+}
+.trynalist-gs-doc:hover { color: var(--text-accent); }
+.trynalist-gs-doc-icon { display: inline-flex; }
+.trynalist-gs-doc-icon .svg-icon { width: 15px; height: 15px; }
+.trynalist-gs-body { margin-top: 10px; }
+.trynalist-gs-children { margin-left: 18px; padding-left: 8px; border-left: 1px solid var(--background-modifier-border); }
+.trynalist-gs-row {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 2px 4px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+.trynalist-gs-bullet { color: var(--text-faint); }
+.trynalist-gs-text { flex: 1; word-break: break-word; }
+/* The matched words, so you can see WHY a row matched without re-reading it. */
+.trynalist-gs-hit { background: var(--text-highlight-bg); border-radius: 2px; }
+
+/* Hovering a row highlights it AND everything under it: in an outline the
+   children are part of what you are pointing at, and clicking zooms to a
+   subtree rather than a line.
+
+   The `:not(:has(...))` is the whole trick. CSS `:hover` applies to every
+   ANCESTOR of the pointed element, not just the element itself — so a plain
+   `.item:hover > .row` lit the row of every ancestor up to the document, which
+   is highlighting upstream when only downstream was wanted. Excluding items
+   that contain another hovered item leaves exactly one: the innermost. */
+.trynalist-gs-item:hover:not(:has(.trynalist-gs-item:hover)) .trynalist-gs-row {
+	background: var(--background-modifier-hover);
+}
+
+/* Search-bar chips: icon, name, chord. Dynalist puts the shortcut on the chip
+   rather than in a tooltip, which is the only place a keyboard user finds it. */
+.trynalist-search-mode { display: inline-flex; align-items: center; gap: 5px; }
+.trynalist-search-mode-icon { display: inline-flex; }
+.trynalist-search-mode-icon .svg-icon { width: 13px; height: 13px; }
+.trynalist-search-key {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	background: var(--background-modifier-border);
+	border-radius: 3px;
+	padding: 0 4px;
+}
+.trynalist-search-mode.is-on .trynalist-search-key { color: var(--interactive-accent); }
+/* Leaving a search, first in the row — every mode has one, not only the ones
+   that happened to get a "Go back". */
+.trynalist-search-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	flex: 0 0 auto;
+	padding: 4px 8px;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--radius-s);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+	box-shadow: none;
+}
+.trynalist-search-back:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.trynalist-search-back-icon { display: inline-flex; }
+.trynalist-search-back-icon .svg-icon { width: 13px; height: 13px; }
+
+/* Operator reference dialog. */
+.trynalist-oh-heading {
+	font-weight: 600;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	margin: 14px 0 5px;
+}
+.trynalist-oh-heading:first-child { margin-top: 0; }
+.trynalist-oh-row { display: flex; gap: 10px; padding: 3px 0; align-items: baseline; }
+.trynalist-oh-op { flex: 0 0 9em; white-space: nowrap; }
+.trynalist-oh-meaning { flex: 1; color: var(--text-muted); }
+.trynalist-oh-credit {
+	margin-top: 18px;
+	padding-top: 10px;
+	border-top: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
