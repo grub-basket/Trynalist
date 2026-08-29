@@ -427,7 +427,15 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	border-radius: var(--radius-s);
 	cursor: pointer;
 	border-bottom: 1px solid var(--background-modifier-border);
+	/* Two columns so the depth badge sits BESIDE the whole result — trail, text
+	   and note — instead of landing on a line of its own above it. */
+	display: grid;
+	grid-template-columns: auto 1fr;
+	column-gap: 2px;
+	align-items: start;
 }
+.trynalist-result > .trynalist-flat-depth { grid-column: 1; grid-row: 1 / -1; }
+.trynalist-result > *:not(.trynalist-flat-depth) { grid-column: 2; }
 .trynalist-result:hover { background: var(--background-modifier-hover); }
 .trynalist-result-text { color: var(--text-normal); }
 .trynalist-suggest-trail {
@@ -1180,12 +1188,24 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	margin-right: 6px;
 	padding: 0 4px;
 	border-radius: var(--radius-s);
-	background: var(--background-modifier-border);
-	color: var(--text-faint);
+	/* Hue set per level in JS; lightness is FIXED so contrast is identical at
+	   every hue and at every depth. Falls back to the neutral border colour
+	   when the variable is absent (any badge rendered outside the flat view). */
+	--tryna-depth-hue: 0;
+	background: hsl(var(--tryna-depth-hue) 55% 86%);
+	color: hsl(var(--tryna-depth-hue) 60% 24%);
 	font-size: var(--font-smallest);
+	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 	text-align: center;
 	vertical-align: 1px;
+}
+
+/* Dark mode inverts which end of the scale carries the text: a pale badge that
+   works on a white page glares on a dark one. */
+.theme-dark .trynalist-flat-depth {
+	background: hsl(var(--tryna-depth-hue) 34% 26%);
+	color: hsl(var(--tryna-depth-hue) 70% 80%);
 }
 
 /* Created / modified: values right-aligned and monospaced so they line up. */
@@ -1510,7 +1530,18 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	border-radius: var(--radius-s);
 }
 .trynalist-customise-btn:hover { background: var(--background-modifier-hover); }
-.trynalist-customise-btn .svg-icon { width: 18px; height: 18px; }
+/* flex: 0 0 auto + min-width, not width alone. An <svg> inside a flex container
+   is a flex ITEM, and flex-shrink defaults to 1 — so a width of 18px is a
+   SUGGESTION the layout is free to squeeze to nothing. Measured before this
+   fix: computed width 0px, height 18px. The icons were present in the DOM and
+   correctly coloured; they were simply zero pixels wide. */
+.trynalist-customise-btn .svg-icon {
+	width: 18px;
+	height: 18px;
+	min-width: 18px;
+	flex: 0 0 auto;
+}
+.trynalist-customise-btn { flex: 0 0 auto; }
 .trynalist-customise-btn.is-remove { color: var(--color-red, #e25c4c); }
 .trynalist-customise-btn.is-add { color: var(--color-green, #44d07b); }
 .trynalist-customise-foot {
@@ -1926,3 +1957,50 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
+
+/* ── Image viewer ────────────────────────────────────────────────────── */
+.trynalist-viewer-modal { width: min(1100px, 92vw); }
+.trynalist-viewer-stage {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* Bounded by the viewport, not the image: a tall photo would otherwise
+	   push the rail off the bottom of the dialog. */
+	max-height: 66vh;
+	background: var(--background-secondary);
+	border-radius: var(--radius-m);
+	overflow: hidden;
+}
+.trynalist-viewer-image { max-width: 100%; max-height: 66vh; object-fit: contain; }
+.trynalist-viewer-bar {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 8px 2px 2px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+.trynalist-viewer-name { word-break: break-all; }
+.trynalist-viewer-count { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+/* The rail scrolls rather than wrapping — a wrapping rail changes height as
+   you walk it, which moves the image you are looking at. */
+.trynalist-viewer-rail {
+	display: flex;
+	gap: 6px;
+	overflow-x: auto;
+	padding: 8px 2px 2px;
+}
+.trynalist-viewer-thumb {
+	flex: 0 0 auto;
+	width: 64px;
+	height: 64px;
+	border-radius: var(--radius-s);
+	overflow: hidden;
+	border: 2px solid transparent;
+	cursor: pointer;
+	opacity: 0.65;
+}
+.trynalist-viewer-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.trynalist-viewer-thumb:hover { opacity: 1; }
+.trynalist-viewer-thumb.is-on { border-color: var(--interactive-accent); opacity: 1; }
+.trynalist-inline-image { cursor: zoom-in; }
