@@ -2110,10 +2110,74 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 }
 .trynalist-diff-before { text-decoration: line-through; }
 
-/* Cancel button inside the import progress notice. */
-.trynalist-notice-cancel {
-	margin-left: 10px;
-	padding: 2px 10px;
+/* ── Import / update progress notice ───────────────────────────────────── */
+/* A Notice renders on Obsidian's own dark surface in BOTH themes, so colours
+   here are relative to the notice's own (light) text — currentColor and
+   translucency — never the theme's foreground tokens, which are dark in light
+   mode and would vanish against the dark notice. */
+.trynalist-import-notice { min-width: 220px; }
+.tin-label { font-weight: 600; }                 /* inherits the notice's text colour */
+.tin-detail {
+	margin-top: 2px;
 	font-size: var(--font-ui-smaller);
-	cursor: pointer;
+	opacity: 0.7;
+	/* The current item's title can be long — keep the notice one tidy line. */
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
+.tin-bar {
+	margin-top: 8px;
+	height: 4px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.18);
+	overflow: hidden;
+}
+.tin-fill {
+	height: 100%;
+	border-radius: 999px;
+	background: var(--interactive-accent);
+	transition: width 0.2s ease;
+}
+.tin-fill.is-cancelling { background: rgba(255, 255, 255, 0.5); }
+.tin-actions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 8px;
+}
+.trynalist-notice-cancel {
+	padding: 3px 12px;
+	font-size: var(--font-ui-smaller);
+	color: inherit;
+	background: transparent;
+	border: 1px solid currentColor;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	box-shadow: none;
+	opacity: 0.75;
+}
+.trynalist-notice-cancel:hover {
+	opacity: 1;
+	background: rgba(255, 255, 255, 0.12);
+}
+
+/* A document that failed to open shows this instead of a blank pane. */
+.trynalist-load-error {
+	max-width: 520px;
+	margin: 40px auto;
+	padding: 20px 24px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary);
+}
+.trynalist-load-error h3 { margin: 0 0 6px; }
+.trynalist-load-error-detail {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-error, var(--text-muted));
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+.trynalist-load-error-actions { display: flex; gap: 8px; margin: 12px 0; }
+.trynalist-load-error-hint { font-size: var(--font-ui-smaller); color: var(--text-faint); margin: 0; }
