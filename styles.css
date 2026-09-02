@@ -617,6 +617,20 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	padding: 0;
 }
 .trynalist-panel-new .svg-icon { width: 18px; height: 18px; }
+/* Obsidian's mobile stylesheet re-pads every <button> (padding: 4px 20px).
+   With box-sizing: border-box that padding consumed this icon button's whole
+   content box, so the icon rendered at its full height and width 0 — present,
+   correctly coloured, invisible. Restate the geometry above `.is-mobile button`
+   and pin the icon so it can never be shrunk to nothing again. */
+.is-mobile .trynalist-panel-new {
+	width: 28px; min-width: 28px; height: 28px;
+	padding: 0;
+	flex: 0 0 auto;
+}
+.is-mobile .trynalist-panel-new .svg-icon {
+	width: 18px; min-width: 18px; height: 18px;
+	flex: 0 0 auto;
+}
 .trynalist-doc-row, .trynalist-group-row { min-height: 30px; }
 .trynalist-doc-row.is-drop-target,
 .trynalist-group-row.is-drop-target {
@@ -2181,3 +2195,19 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 }
 .trynalist-load-error-actions { display: flex; gap: 8px; margin: 12px 0; }
 .trynalist-load-error-hint { font-size: var(--font-ui-smaller); color: var(--text-faint); margin: 0; }
+
+/* ── Document selection modal (selective import/update) ────────────────── */
+.trynalist-docselect-search { margin-bottom: 8px; }
+.trynalist-docselect-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 5px 4px;
+	border-bottom: 1px solid var(--background-modifier-border-hover);
+	cursor: pointer;
+}
+.trynalist-docselect-row:hover { background: var(--background-modifier-hover); }
+.trynalist-docselect-row input[type="checkbox"] { margin-top: 3px; }
+.trynalist-docselect-body { min-width: 0; }
+.trynalist-docselect-title { color: var(--text-normal); }
+.trynalist-docselect-path { font-size: var(--font-ui-smaller); color: var(--text-faint); }
