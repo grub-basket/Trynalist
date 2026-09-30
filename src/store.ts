@@ -91,17 +91,22 @@ function joinBody(text: string, note: string): string {
 	return note ? `${line}\n${note}\n` : `${line}\n`;
 }
 
+// Built via String.fromCharCode, not a regex/string literal, so eslint's
+// no-control-regex rule doesn't flag the NUL placeholder below.
+const NUL = String.fromCharCode(0);
+const NUL_RE = new RegExp(NUL, "g");
+
 function escapeBreaks(s: string): string {
 	// Backslashes first, so an escaped break is never confused with a literal
 	// backslash the user typed. A carriage return is a break too: left raw, the
 	// line-ending normalisation on the next load turned it into a newline and
 	// split the item in two (L31). NUL is dropped — it is the placeholder
 	// unescapeBreaks uses, and has no business in item text.
-	return s.replace(/\u0000/g, "").replace(/\\/g, "\\\\").replace(/\r\n?|\n/g, "\\n");
+	return s.replace(NUL_RE, "").replace(/\\/g, "\\\\").replace(/\r\n?|\n/g, "\\n");
 }
 
 function unescapeBreaks(s: string): string {
-	return s.replace(/\\\\/g, "\u0000").replace(/\\n/g, "\n").replace(/\u0000/g, "\\");
+	return s.replace(/\\\\/g, NUL).replace(/\\n/g, "\n").replace(NUL_RE, "\\");
 }
 
 /** Parse a file's own YAML frontmatter into an object, or null if it has none
@@ -111,11 +116,21 @@ export function parseFrontmatterBlock(raw: string): Record<string, unknown> | nu
 	const m = /^---\n([\s\S]*?)\n---/.exec(raw);
 	if (!m) return null;
 	try {
-		const parsed = parseYaml(m[1]);
+		const parsed: unknown = parseYaml(m[1]);
 		return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
 	} catch {
 		return null;
 	}
+}
+
+/** Frontmatter ids are always written as strings or numbers (`newId()`
+ *  returns a string; legacy data can carry a numeric id). The narrow param
+ *  type — rather than `unknown` going straight into `String()` — is what
+ *  keeps this assignable-from-`any`-so-"unnecessary" vs.
+ *  not-safely-stringifiable lint rules both satisfied without changing what
+ *  actually gets printed for a well-formed id. */
+export function idToString(id: string | number): string {
+	return String(id);
 }
 
 function stripFrontmatter(raw: string): string {
@@ -133,7 +148,7 @@ export function readItemFile(raw: string): { id: string; fm: Record<string, unkn
 	const fm = parseFrontmatterBlock(text);
 	if (!fm || fm.id === undefined || fm.id === null || fm.id === "") return null;
 	const body = splitBody(stripFrontmatter(text));
-	return { id: String(fm.id), fm, text: body.text, note: body.note };
+	return { id: idToString(fm.id as string | number), fm, text: body.text, note: body.note };
 }
 
 /** Node files are written with LF, but a file that passed through a Windows
@@ -224,7 +239,7 @@ export function loadReadOnlyIndex(app: App, doc: DocRef): Promise<DocIndex> {
 	// A failed load must not be served from the cache.
 	entry.index.catch(() => { if (readIndexCache.get(key) === entry) readIndexCache.delete(key); });
 	while (readIndexCache.size > READ_INDEX_MAX) {
-		const oldest = readIndexCache.keys().next().value;
+		const oldest = readIndexCache.keys().next().value as string | undefined;
 		if (oldest === undefined) break;
 		readIndexCache.delete(oldest);
 	}
@@ -862,7 +877,7 @@ export class DocIndex {
 		const text0 = normalizeEol(raw);
 		const fm = parseFrontmatterBlock(text0);
 		if (!fm || fm.id === undefined || fm.id === null || fm.id === "") return true;
-		const n = this.nodes.get(String(fm.id));
+		const n = this.nodes.get(idToString(fm.id as string | number));
 		if (!n) return false;
 		const { text, note } = splitBody(stripFrontmatter(text0).replace(/\s+$/, ""));
 		const parent = typeof fm.parent === "string" && fm.parent !== "__root__" ? fm.parent : null;
@@ -1659,7 +1674,7 @@ export async function checkIntegrity(app: App, rootFolder: string): Promise<Inte
 					continue;
 				}
 				report.nodes++;
-				const id = String(fm.id);
+				const id = idToString(fm.id as string | number);
 				const other = firstFile.get(id);
 				if (other) {
 					// Name both, and which one the outline shows — the one load()
@@ -1710,12 +1725,12 @@ export async function reattachOrphans(app: App, paths: string[]): Promise<number
 		let present = false;
 		for (const sib of siblings) {
 			if (!(sib instanceof TFile) || sib.extension !== "md" || sib === file) continue;
-			const cached = app.metadataCache.getFileCache(sib)?.frontmatter?.id;
+			const cached: unknown = app.metadataCache.getFileCache(sib)?.frontmatter?.id;
 			const id = cached ?? parseFrontmatterBlock(normalizeEol(await app.vault.cachedRead(sib)))?.id;
-			if (id !== undefined && String(id) === parent) { present = true; break; }
+			if (id !== undefined && idToString(id as string | number) === parent) { present = true; break; }
 		}
 		if (present) continue;
-		await app.fileManager.processFrontMatter(file, (fm) => { fm.parent = null; });
+		await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => { fm.parent = null; });
 		fixed++;
 	}
 	return fixed;

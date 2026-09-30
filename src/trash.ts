@@ -1,6 +1,6 @@
 import { App, ButtonComponent, Modal, Notice, Setting, TFile, TFolder, normalizePath, setIcon } from "obsidian";
 import { TRASH_FOLDER } from "./types";
-import { listDocs, parseFrontmatterBlock } from "./store";
+import { idToString, listDocs, parseFrontmatterBlock } from "./store";
 import { ConfirmModal } from "./modals";
 
 /** Trynalist's own trash — an enhancement over Dynalist, which has none. Deleted
@@ -65,10 +65,10 @@ async function resolveDocFolder(app: App, rootFolder: string, info: TrashInfo): 
 
 /** The item id in a node file's frontmatter. */
 async function idOf(app: App, file: TFile): Promise<string | null> {
-	const cached = app.metadataCache.getFileCache(file)?.frontmatter?.id;
-	if (cached !== undefined && cached !== null && cached !== "") return String(cached);
+	const cached: unknown = app.metadataCache.getFileCache(file)?.frontmatter?.id;
+	if (cached !== undefined && cached !== null && cached !== "") return idToString(cached as string | number);
 	const fm = parseFrontmatterBlock(await app.vault.cachedRead(file));
-	return fm?.id !== undefined && fm.id !== null && fm.id !== "" ? String(fm.id) : null;
+	return fm?.id !== undefined && fm.id !== null && fm.id !== "" ? idToString(fm.id as string | number) : null;
 }
 
 export interface RestoreResult {

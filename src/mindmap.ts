@@ -358,7 +358,7 @@ export class MindMap {
  *  the map wants a legible label, not formatting. */
 export function plainOf(text: string): string {
 	return text
-		.replace(/!?\[\[([^\[\]|]+)(?:\|([^\[\]]+))?\]\]/g, (_, p, l) => l || p.split("/").pop() || p)
+		.replace(/!?\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/g, (_: string, p: string, l: string | undefined) => l || p.split("/").pop() || p)
 		.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
 		.replace(/`([^`]+)`/g, "$1")
 		.replace(/\*\*\*([^*]+)\*\*\*/g, "$1")

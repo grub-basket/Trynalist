@@ -242,12 +242,12 @@ export async function applyDocUpdate(
  *  it newly marked the file. */
 async function markRemoved(app: App, file: TFile, stamp: string): Promise<boolean> {
 	let newly = false;
-	await app.fileManager.processFrontMatter(file, (fm) => {
+	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 		if (!fm.dlRemoved) { fm.dlRemoved = stamp; newly = true; }
 	});
 	return newly;
 }
 
 async function clearRemovedMark(app: App, file: TFile): Promise<void> {
-	await app.fileManager.processFrontMatter(file, (fm) => { delete fm.dlRemoved; });
+	await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => { delete fm.dlRemoved; });
 }

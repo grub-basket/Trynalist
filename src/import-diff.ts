@@ -1,6 +1,5 @@
 import { App, FuzzySuggestModal, Modal, Notice, Setting, TFolder, setIcon } from "obsidian";
 import { listDocs, loadReadOnlyIndex } from "./store";
-import type { DocRef } from "./types";
 
 /** Compare two Dynalist import runs and show what changed between them.
  *
@@ -174,7 +173,7 @@ class RunFolderPicker extends FuzzySuggestModal<TFolder> {
 export function openImportDiff(app: App, rootFolder: string): void {
 	const root = app.vault.getFolderByPath(rootFolder.replace(/\/+$/, ""));
 	const subfolders = root
-		? (root.children.filter((c) => c instanceof TFolder) as TFolder[])
+		? root.children.filter((c): c is TFolder => c instanceof TFolder)
 		: [];
 	if (subfolders.length < 2) {
 		new Notice("Trynalist: need at least two import folders to compare. Import more than once first.");

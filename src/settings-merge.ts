@@ -42,7 +42,7 @@ function mergeObject(base: Record<string, Json>, local: Record<string, Json>, re
 }
 
 function mergeKeyedList(field: string, base: Json[], local: Json[], remote: Json[]): Json[] {
-	const keyOf = (e: Json): string | null => (isPlainObject(e) && typeof e[field] === "string" ? e[field] as string : null);
+	const keyOf = (e: Json): string | null => (isPlainObject(e) && typeof e[field] === "string" ? e[field] : null);
 	const index = (list: Json[]): Map<string, Json> => {
 		const m = new Map<string, Json>();
 		for (const e of list) { const k = keyOf(e); if (k !== null) m.set(k, e); }

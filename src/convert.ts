@@ -34,6 +34,9 @@ const SIDECAR_FILES = [ORDER_FILE, SORT_FILE, ...STRUCTURE_FILES];
 /** Sidecars that describe state which cannot survive conversion. */
 const STALE_AFTER_CONVERSION = [SORT_FILE, ...STRUCTURE_FILES];
 type OrderMap = Record<string, string[]>;
+/** `processFrontMatter`'s callback parameter is typed `any` in obsidian.d.ts;
+ *  this narrows it to a plain record so member access stays type-checked. */
+type FrontmatterRecord = Record<string, unknown>;
 
 /** Back up every sidecar dotfile; the vault API cannot see them, so
  *  `vault.copy` skipped them and the backup was quietly incomplete. */
@@ -263,7 +266,7 @@ export async function convertStashpadToTrynalist(
 		const fm = app.metadataCache.getFileCache(file)?.frontmatter
 			?? parseFrontmatterBlock(await app.vault.cachedRead(file)) ?? {};
 		const id = typeof fm.id === "string" ? fm.id : "";
-		if (id) seen.set(id, { file, fm: fm as Record<string, unknown> });
+		if (id) seen.set(id, { file, fm: fm });
 	}
 
 	// The real arrangement: parent -> ordered child ids, from the dotfile.
@@ -308,7 +311,7 @@ export async function convertStashpadToTrynalist(
 		// current frontmatter, whereas the metadata cache can still be stale on
 		// a recently written file — which silently lost the attachment list.
 		let attachments: string[] = [];
-		await app.fileManager.processFrontMatter(file, (fm) => {
+		await app.fileManager.processFrontMatter(file, (fm: FrontmatterRecord) => {
 			if (Array.isArray(fm.attachments)) attachments = fm.attachments as string[];
 			// Identity: keep Stashpad's id where there is one; the home note gets
 			// a fresh id so it becomes an ordinary top-level item.
@@ -409,7 +412,7 @@ async function stampDepths(app: App, folder: TFolder): Promise<void> {
 	};
 	for (const [id, file] of fileOf) {
 		const depth = depthOf(id);
-		await app.fileManager.processFrontMatter(file, (fm) => {
+		await app.fileManager.processFrontMatter(file, (fm: FrontmatterRecord) => {
 			fm.depth = depth;
 			if (typeof fm.indent !== "number") fm.indent = depth;
 		});
@@ -434,14 +437,14 @@ export async function convertTrynalistToStashpad(
 		const raw = await app.vault.cachedRead(file);
 		// Embeds only. Making the `!` optional turned an ordinary [[note link]]
 		// into an "attachment" on the way back; the alias is stripped too.
-		const found = [...raw.matchAll(/!\[\[([^\[\]|]+)(?:\|[^\[\]]*)?\]\]/g)]
+		const found = [...raw.matchAll(/!\[\[([^[\]|]+)(?:\|[^[\]]*)?\]\]/g)]
 			.map((m) => `[[${m[1].trim()}]]`);
 		if (found.length) bodyEmbeds.set(file.path, [...new Set(found)]);
 	}
 
 	let restoredHome = false;
 	for (const file of mds) {
-		await app.fileManager.processFrontMatter(file, (fm) => {
+		await app.fileManager.processFrontMatter(file, (fm: FrontmatterRecord) => {
 			if (fm.wasStashpadHome === true) {
 				// This file was Stashpad's home note before an earlier
 				// conversion; put it back so the round trip is lossless.

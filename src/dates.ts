@@ -125,8 +125,8 @@ export function parseAllDates(text: string): ParsedDate[] {
  *  must not become this one's due date or recurrence (M44). */
 export function withoutLinks(text: string): string {
 	return text
-		.replace(/!?\[\[[^\[\]]*\]\]/g, " ")
-		.replace(/\[[^\[\]\n]*\]\([^)\n]*\)/g, " ");
+		.replace(/!?\[\[[^[\]]*\]\]/g, " ")
+		.replace(/\[[^[\]\n]*\]\([^)\n]*\)/g, " ");
 }
 
 /** The date written back into an item's `due` frontmatter: the earliest one,

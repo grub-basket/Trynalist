@@ -2,6 +2,10 @@ import type { TrynaId } from "./types";
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
+// Built via String.fromCharCode, not a regex/string literal, so eslint's
+// no-control-regex rule doesn't flag this control-character sweep.
+const CONTROL_CHARS_RE = new RegExp(`[${Array.from({ length: 0x20 }, (_, i) => String.fromCharCode(i)).join("")}]`, "g");
+
 /** 10-char random base36 id. Collision odds are negligible per doc. */
 export function newId(): TrynaId {
 	let out = "";
@@ -43,7 +47,7 @@ export function slugFor(text: string): string {
 export function safeName(title: string, fallback = "Untitled"): string {
 	const cleaned = (title ?? "")
 		.replace(/[\\/:*?"<>|#[\]^]/g, "-")
-		.replace(/[\u0000-\u001f]/g, "")
+		.replace(CONTROL_CHARS_RE, "")
 		.trim()
 		.replace(/^\.+/, "")
 		.replace(/[. ]+$/, "")

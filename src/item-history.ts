@@ -1,7 +1,24 @@
 import { App, TFile, TFolder, normalizePath } from "obsidian";
 import { unzipSync, strFromU8 } from "fflate";
-import { readItemFile } from "./store";
+import { idToString, readItemFile } from "./store";
 import { DOC_EXTENSION, isReservedFolderName } from "./types";
+
+// The installed fflate types declare their return values with the TS 5.7+
+// generic `Uint8Array<TArrayBuffer>` syntax, which the store-lint tool's own
+// bundled (older) TypeScript cannot parse — see the matching comment in
+// backup.ts. These thin wrappers, round-tripped through `unknown`, keep both
+// TS versions satisfied without changing what gets unzipped or decoded.
+function unzipSyncTyped(
+	data: Uint8Array,
+	opts?: { filter?: (file: { name: string; size: number; originalSize: number; compression: number }) => boolean },
+): Record<string, Uint8Array> {
+	const result: unknown = unzipSync(data, opts);
+	return result as Record<string, Uint8Array>;
+}
+function strFromU8Typed(dat: Uint8Array): string {
+	const result: unknown = strFromU8(dat);
+	return result as string;
+}
 
 /** Per-item edit history, part of the sync safety net.
  *
@@ -169,7 +186,7 @@ export class ItemHistory {
 				return;   // nothing to say about a file we never saw
 			}
 			this.lastByPath.set(path, {
-				t: "", kind: "delete", id: String(cachedId as string | number), path,
+				t: "", kind: "delete", id: idToString(cachedId as string | number), path,
 				doc: path.slice(0, path.lastIndexOf("/")), text: "", note: "",
 			});
 		}
@@ -457,9 +474,9 @@ export class ItemHistory {
 		for (const zip of zips.slice(0, limit)) {
 			try {
 				const data = new Uint8Array(await this.app.vault.adapter.readBinary(zip.path));
-				const files = unzipSync(data, { filter: (f) => f.name.endsWith(".md") && f.name.includes(id) });
+				const files = unzipSyncTyped(data, { filter: (f) => f.name.endsWith(".md") && f.name.includes(id) });
 				for (const [name, bytes] of Object.entries(files)) {
-					const item = readItemFile(strFromU8(bytes));
+					const item = readItemFile(strFromU8Typed(bytes));
 					if (!item || item.id !== id) continue;
 					out.push({
 						when: snapshotIso(zip.when), source: "snapshot", kind: "snapshot", text: item.text, note: item.note,
@@ -489,9 +506,9 @@ export class ItemHistory {
 			try {
 				const data = new Uint8Array(await this.app.vault.adapter.readBinary(zip.path));
 				const ids = [...want.keys()];
-				const files = unzipSync(data, { filter: (f) => f.name.endsWith(".md") && ids.some((id) => f.name.includes(id)) });
+				const files = unzipSyncTyped(data, { filter: (f) => f.name.endsWith(".md") && ids.some((id) => f.name.includes(id)) });
 				for (const bytes of Object.values(files)) {
-					const item = readItemFile(strFromU8(bytes));
+					const item = readItemFile(strFromU8Typed(bytes));
 					const e = item ? want.get(item.id) : undefined;
 					if (!item || !e || (!item.text && !item.note)) continue;
 					e.text = item.text;

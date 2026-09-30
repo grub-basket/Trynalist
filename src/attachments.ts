@@ -27,7 +27,7 @@ export interface AttachmentEntry {
 }
 
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif"]);
-const EMBED_RE = /!?\[\[([^\[\]|]+)(?:\|[^\[\]]*)?\]\]/g;
+const EMBED_RE = /!?\[\[([^[\]|]+)(?:\|[^[\]]*)?\]\]/g;
 
 /** Every attachment referenced by any document, plus anything sitting unused
  *  in a document's own `_attachments` folder. */
@@ -121,7 +121,7 @@ export async function collectAttachments(app: App, rootFolder: string): Promise<
  *  names the file, so repeating the raw `![[…]]` made the label unreadable. */
 function describeItem(node: TreeNode): string {
 	const clean = node.text
-		.replace(/!?\[\[[^\[\]]+\]\]/g, "")
+		.replace(/!?\[\[[^[\]]+\]\]/g, "")
 		.replace(/!\([^)]*\)/g, "")
 		.replace(/[*_~`]/g, "")
 		.replace(/\s{2,}/g, " ")
@@ -272,9 +272,11 @@ export class AttachmentsModal extends Modal {
 			this.action(actions, "external-link", "Open", () => {
 				void this.app.workspace.getLeaf(true).openFile(entry.file!);
 			});
-			this.action(actions, "link", "Copy link", async () => {
-				await navigator.clipboard.writeText(`![[${entry.file!.path}]]`);
-				new Notice("Trynalist: link copied.");
+			this.action(actions, "link", "Copy link", () => {
+				void (async () => {
+					await navigator.clipboard.writeText(`![[${entry.file!.path}]]`);
+					new Notice("Trynalist: link copied.");
+				})();
 			});
 			this.action(actions, "trash", "Delete", () => this.confirmDelete(entry));
 		}

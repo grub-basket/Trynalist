@@ -301,7 +301,7 @@ export class ItemSuggestModal extends SuggestModal<TreeNode> {
 	}
 
 	onOpen(): void {
-		super.onOpen();
+		void super.onOpen();
 		if (!this.opts.rootLabel) return;
 		// A fixed "top level" entry, since the doc root is not an item.
 		const host = this.modalEl.querySelector(".prompt-results");

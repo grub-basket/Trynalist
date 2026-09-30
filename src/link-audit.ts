@@ -25,7 +25,7 @@ interface BrokenLink {
 
 // One pattern for wikilinks and embeds: optional leading "!", target up to a
 // "#" anchor or "|" label. Global so every link on a line is found.
-const LINK_RE = /(!)?\[\[([^\[\]|#]+)(?:#[^\[\]|]+)?(?:\|[^\[\]]+)?\]\]/g;
+const LINK_RE = /(!)?\[\[([^[\]|#]+)(?:#[^[\]|]+)?(?:\|[^[\]]+)?\]\]/g;
 
 export async function auditLinks(app: App, rootFolder: string): Promise<BrokenLink[]> {
 	const docs = await listDocs(app, rootFolder, { includeArchived: true });

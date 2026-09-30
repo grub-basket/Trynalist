@@ -51,6 +51,13 @@ const OPENS_IN_OBSIDIAN = new Set([
 
 export default class TrynalistPlugin extends Plugin {
 	settings: TrynalistSettings = { ...DEFAULT_SETTINGS };
+	/** Default chords for document commands. The store forbids `hotkeys` on
+	 *  addCommand, so instead each open document view registers these in its
+	 *  own keymap scope (see TrynalistDocView's constructor): live only while
+	 *  the keyboard is inside a document, and off entirely when the
+	 *  `builtinShortcuts` setting is. `fire(true)` asks whether the command
+	 *  applies right now, exactly like a checkCallback. */
+	viewChords: Array<{ modifiers: Modifier[]; key: string; fire: (checking: boolean) => boolean }> = [];
 	safetyNet: SafetyNet | null = null;
 	itemHistory: ItemHistory | null = null;
 	/** True while a Dynalist import runs, so a second can't start on top of it.
@@ -258,33 +265,32 @@ export default class TrynalistPlugin extends Plugin {
 		// undo handles typing as before. Leaving them unbound (the original
 		// choice, to protect that native undo) meant Mod+Z did nothing at all
 		// for structure, which read as "there is no undo".
-		this.addCommand({
-			id: "undo-structural",
-			name: "Undo last structural change",
-			hotkeys: [{ modifiers: ["Mod"], key: "z" }],
-			checkCallback: (checking) => {
-				const view = this.activeFocusedDoc();
-				if (!view || !view.canUndo()) return false;
-				if (!checking) void view.undo();
-				return true;
-			},
-		});
-		this.addCommand({
-			id: "redo-structural",
-			name: "Redo structural change",
-			// Mod+Y as well: the Windows/Linux redo convention, and one the user
-			// asked for explicitly.
-			hotkeys: [
-				{ modifiers: ["Mod", "Shift"], key: "z" },
-				{ modifiers: ["Mod"], key: "y" },
-			],
-			checkCallback: (checking) => {
-				const view = this.activeFocusedDoc();
-				if (!view || !view.canRedo()) return false;
-				if (!checking) void view.redo();
-				return true;
-			},
-		});
+		// The store forbids default `hotkeys` on a command, so the chords live
+		// in the document view's scope instead (`viewChords`): same gating, same
+		// fall-through when the check fails, and Obsidian's hotkey settings can
+		// still bind anything on top.
+		const chorded = (
+			id: string, name: string,
+			checkCallback: (checking: boolean) => boolean,
+			hotkeys: Array<{ modifiers: Modifier[]; key: string }>,
+		) => {
+			this.addCommand({ id, name, checkCallback });
+			for (const h of hotkeys) this.viewChords.push({ ...h, fire: checkCallback });
+		};
+		chorded("undo-structural", "Undo last structural change", (checking) => {
+			const view = this.activeFocusedDoc();
+			if (!view || !view.canUndo()) return false;
+			if (!checking) void view.undo();
+			return true;
+		}, [{ modifiers: ["Mod"], key: "z" }]);
+		// Mod+Y as well: the Windows/Linux redo convention, and one the user
+		// asked for explicitly.
+		chorded("redo-structural", "Redo structural change", (checking) => {
+			const view = this.activeFocusedDoc();
+			if (!view || !view.canRedo()) return false;
+			if (!checking) void view.redo();
+			return true;
+		}, [{ modifiers: ["Mod", "Shift"], key: "z" }, { modifiers: ["Mod"], key: "y" }]);
 		// Copy/cut of a BLOCK selection have to be commands. Selecting rows
 		// clears the native text selection, and a browser fires no `copy` event
 		// when nothing is natively selected — so the event handler alone was
@@ -356,20 +362,15 @@ export default class TrynalistPlugin extends Plugin {
 				},
 			});
 		}
-		this.addCommand({
-			id: "delete-line",
-			name: "Delete the current item (with children)",
-			// Mod+D is NOT registered here: core already binds it to
-			// editor:delete-paragraph, and a contested chord resolves
-			// unpredictably. The row's own keydown handles Mod+D instead.
-			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "k" }],
-			checkCallback: (checking) => {
-				const view = this.activeFocusedDoc();
-				if (!view || !view.hasDeleteTarget()) return false;
-				if (!checking) void view.cmdDeleteLine();
-				return true;
-			},
-		});
+		// Mod+D is NOT registered here: core already binds it to
+		// editor:delete-paragraph, and a contested chord resolves
+		// unpredictably. The row's own keydown handles Mod+D instead.
+		chorded("delete-line", "Delete the current item (with children)", (checking) => {
+			const view = this.activeFocusedDoc();
+			if (!view || !view.hasDeleteTarget()) return false;
+			if (!checking) void view.cmdDeleteLine();
+			return true;
+		}, [{ modifiers: ["Mod", "Shift"], key: "k" }]);
 		this.addCommand({
 			id: "copy-with-timestamps",
 			name: "Copy with creation timestamps",
@@ -401,17 +402,12 @@ export default class TrynalistPlugin extends Plugin {
 			run: (v: TrynalistDocView) => void,
 			hotkeys?: Array<{ modifiers: Modifier[]; key: string }>,
 		) => {
-			this.addCommand({
-				id,
-				name,
-				hotkeys,
-				checkCallback: (checking) => {
-					const view = this.activeFocusedDoc();
-					if (!view) return false;
-					if (!checking) run(view);
-					return true;
-				},
-			});
+			chorded(id, name, (checking) => {
+				const view = this.activeFocusedDoc();
+				if (!view) return false;
+				if (!checking) run(view);
+				return true;
+			}, hotkeys ?? []);
 		};
 		// Dynalist's own chords, including the ones that overlap universal
 		// editing — Mod+A, Mod+F, Mod+Up/Down, Mod+[ / Mod+].
@@ -422,8 +418,8 @@ export default class TrynalistPlugin extends Plugin {
 		// safe is `activeFocusedDoc`: every one of these fires only while the
 		// keyboard is genuinely inside a Trynalist document, so a sidebar
 		// input, a search box or another plugin's pane keeps its own binding.
-		// Anyone who still wants a chord back can clear it in Obsidian's
-		// hotkey settings.
+		// Anyone who wants them gone turns off "Built-in shortcuts" in settings
+		// and binds their own in Obsidian's hotkey settings.
 		const key = (k: string, ...modifiers: Modifier[]) => [{ modifiers, key: k }];
 		// Every item-menu action is also a command, so any of them can be given
 		// a hotkey. No defaults — Obsidian's own bindings own most chords.
@@ -712,7 +708,7 @@ export default class TrynalistPlugin extends Plugin {
 				for (const f of this.app.vault.getMarkdownFiles()) {
 					if (!f.path.startsWith(root)) continue;
 					const id: unknown = this.app.metadataCache.getFileCache(f)?.frontmatter?.id;
-					if (id !== undefined && id !== null && id !== "") existing.add(String(id as string | number));
+					if ((typeof id === "string" || typeof id === "number") && id !== "") existing.add(String(id));
 				}
 				const all = await h.recentlyDeleted(existing);
 				if (this.safetyNet) await h.fillFromSnapshots(all, await this.safetyNet.listOutlines(), 7);
@@ -768,14 +764,14 @@ export default class TrynalistPlugin extends Plugin {
 			new Notice(`Trynalist: no settings snapshots on this device yet (they live in ${SAFETY_DIR}).`);
 			return;
 		}
-		const plugin = this;
 		const count = (v: unknown): number => (Array.isArray(v) ? v.length : 0);
+		const confirmSettingsRestore = (s: SettingsSnapshot): void => this.confirmSettingsRestore(s);
 		class SnapPicker extends FuzzySuggestModal<SettingsSnapshot> {
 			getItems(): SettingsSnapshot[] { return snaps; }
 			getItemText(s: SettingsSnapshot): string {
 				return `${s.when} · ${count(s.data.templates)} templates · ${count(s.data.bookmarks)} bookmarks`;
 			}
-			onChooseItem(s: SettingsSnapshot): void { plugin.confirmSettingsRestore(s); }
+			onChooseItem(s: SettingsSnapshot): void { confirmSettingsRestore(s); }
 		}
 		const picker = new SnapPicker(this.app);
 		picker.setPlaceholder("Restore settings from which snapshot?");
@@ -822,11 +818,11 @@ export default class TrynalistPlugin extends Plugin {
 			new Notice(`Trynalist: no outline snapshots on this device yet (they live in ${SAFETY_DIR}).`);
 			return;
 		}
-		const plugin = this;
+		const restoreOutlineSnapshot = (s: OutlineSnapshot): void => { void this.restoreOutlineSnapshot(s); };
 		class OutlinePicker extends FuzzySuggestModal<OutlineSnapshot> {
 			getItems(): OutlineSnapshot[] { return snaps; }
 			getItemText(s: OutlineSnapshot): string { return `${s.when} · ${Math.max(1, Math.round(s.bytes / 1024))} KB`; }
-			onChooseItem(s: OutlineSnapshot): void { void plugin.restoreOutlineSnapshot(s); }
+			onChooseItem(s: OutlineSnapshot): void { restoreOutlineSnapshot(s); }
 		}
 		const picker = new OutlinePicker(this.app);
 		picker.setPlaceholder("Restore which day's outline? It goes into a new folder, so nothing is overwritten");
@@ -1214,7 +1210,7 @@ export default class TrynalistPlugin extends Plugin {
 	searchOpenDoc(query: string): void {
 		const view = this.app.workspace.getActiveViewOfType(TrynalistDocView);
 		if (!view) { this.searchEverywhere(query); return; }
-		this.app.workspace.revealLeaf(view.leaf);
+		void this.app.workspace.revealLeaf(view.leaf);
 		view.openSearch(query);
 	}
 
@@ -1300,7 +1296,7 @@ export default class TrynalistPlugin extends Plugin {
 		if (!this.settings.openInNewTab) {
 			return { leaf: this.app.workspace.getLeaf(false), from: null };
 		}
-		const from = this.app.workspace.activeLeaf ?? null;
+		const from = this.app.workspace.getMostRecentLeaf() ?? null;
 		return { leaf: this.app.workspace.getLeaf("tab"), from };
 	}
 
@@ -1313,33 +1309,36 @@ export default class TrynalistPlugin extends Plugin {
 	 *  returns there. An empty leaf (a new tab, or one this plugin just made for
 	 *  the purpose) is left alone, so the plugin's own openers are unaffected. */
 	private patchOpenFileForNewTab(): void {
-		const plugin = this;
+		const { app, settings } = this;
+		const leafInMainArea = this.leafInMainArea.bind(this);
+		const trackOpenedLeaf = this.trackOpenedLeaf.bind(this);
+		const focusNewTab = this.focusNewTab.bind(this);
 		const proto = WorkspaceLeaf.prototype as unknown as {
 			openFile: (this: WorkspaceLeaf, file: TFile, state?: Record<string, unknown>) => Promise<void>;
 		};
 		const original = proto.openFile;
 		proto.openFile = async function (this: WorkspaceLeaf, file: TFile, state?: Record<string, unknown>): Promise<void> {
 			if (
-				plugin.settings.openInNewTab
+				settings.openInNewTab
 				&& file instanceof TFile
 				&& file.extension === DOC_EXTENSION
 				&& this.view
 				&& this.view.getViewType() !== "empty"
 				&& !(this.view instanceof TrynalistDocView && this.view.file?.path === file.path)
-				&& plugin.app.workspace.rootSplit && plugin.leafInMainArea(this)
+				&& app.workspace.rootSplit && leafInMainArea(this)
 			) {
 				// Already open elsewhere? Reveal that tab instead of a third copy.
-				for (const leaf of plugin.app.workspace.getLeavesOfType(DOC_VIEW_TYPE)) {
+				for (const leaf of app.workspace.getLeavesOfType(DOC_VIEW_TYPE)) {
 					const v = leaf.view;
 					if (v instanceof TrynalistDocView && v.file?.path === file.path) {
-						void plugin.app.workspace.revealLeaf(leaf);
+						void app.workspace.revealLeaf(leaf);
 						return;
 					}
 				}
-				const target = plugin.app.workspace.getLeaf("tab");
-				plugin.trackOpenedLeaf(target, this);
+				const target = app.workspace.getLeaf("tab");
+				trackOpenedLeaf(target, this);
 				// Respect the caller's `active`; only default to our own setting.
-				return original.call(target, file, { ...(state ?? {}), active: state?.active ?? plugin.focusNewTab() });
+				return original.call(target, file, { ...(state ?? {}), active: state?.active ?? focusNewTab() });
 			}
 			return original.call(this, file, state);
 		};
@@ -1485,7 +1484,7 @@ export default class TrynalistPlugin extends Plugin {
 
 	private registerDeepLinks(): void {
 		this.registerObsidianProtocolHandler("trynalist", (params) => {
-			void this.openDeepLink(params as unknown as Record<string, string>);
+			void this.openDeepLink(params);
 		});
 	}
 
@@ -1548,13 +1547,14 @@ export default class TrynalistPlugin extends Plugin {
 			new Notice("Trynalist: no folders found to convert.");
 			return;
 		}
-		const plugin = this;
+		const app = this.app;
+		const confirmConversion = (f: TFolder): void => this.confirmConversion(f);
 		class FolderPicker extends FuzzySuggestModal<TFolder> {
 			getItems(): TFolder[] { return candidates; }
 			getItemText(f: TFolder): string {
-				return `${f.path}  (${detectFolderKind(plugin.app, f)})`;
+				return `${f.path}  (${detectFolderKind(app, f)})`;
 			}
-			onChooseItem(f: TFolder): void { plugin.confirmConversion(f); }
+			onChooseItem(f: TFolder): void { confirmConversion(f); }
 		}
 		const picker = new FolderPicker(this.app);
 		picker.setPlaceholder("Choose a folder to convert…");
@@ -1603,16 +1603,18 @@ export default class TrynalistPlugin extends Plugin {
 			new Notice("Trynalist: no importable files found in the vault.");
 			return;
 		}
-		const plugin = this;
+		const chooseFile = (f: TFile): void => {
+			void (async () => {
+				const done = await importVaultFile(this.app, this.settings.rootFolder, f);
+				if (!done) return;
+				await this.openDoc(done.doc);
+				this.reportImport(done.doc.manifest.title, done.items, done.warnings);
+			})();
+		};
 		class FilePicker extends FuzzySuggestModal<TFile> {
 			getItems(): TFile[] { return candidates; }
 			getItemText(f: TFile): string { return f.path; }
-			async onChooseItem(f: TFile): Promise<void> {
-				const done = await importVaultFile(plugin.app, plugin.settings.rootFolder, f);
-				if (!done) return;
-				await plugin.openDoc(done.doc);
-				plugin.reportImport(done.doc.manifest.title, done.items, done.warnings);
-			}
+			onChooseItem(f: TFile): void { chooseFile(f); }
 		}
 		const picker = new FilePicker(this.app);
 		picker.setPlaceholder("Choose a file to import…");
@@ -1640,10 +1642,12 @@ export default class TrynalistPlugin extends Plugin {
 		let file = path ? this.app.vault.getAbstractFileByPath(path) : null;
 		if (!(file instanceof TFile)) {
 			// No inbox set (or it moved): let the user pick one, and remember it.
-			const modal = new DocSuggestModal(this.app, this.settings.rootFolder, async (doc) => {
-				this.settings.inboxDocPath = doc.file.path;
-				await this.saveSettings();
-				await this.captureToInbox();
+			const modal = new DocSuggestModal(this.app, this.settings.rootFolder, (doc) => {
+				void (async () => {
+					this.settings.inboxDocPath = doc.file.path;
+					await this.saveSettings();
+					await this.captureToInbox();
+				})();
 			});
 			await modal.load();
 			modal.setPlaceholder("Choose a document to use as your inbox…");
@@ -1792,11 +1796,11 @@ export default class TrynalistPlugin extends Plugin {
 
 	private pickImportToUpdateWith(runs: TFolder[]): void {
 		if (!runs.length) { new Notice("Trynalist: no existing import folders to update."); return; }
-		const plugin = this;
+		const updateFromDynalist = (name: string): void => { void this.updateFromDynalist(name); };
 		class RunPicker extends FuzzySuggestModal<TFolder> {
 			getItems(): TFolder[] { return runs; }
 			getItemText(f: TFolder): string { return f.name; }
-			onChooseItem(f: TFolder): void { void plugin.updateFromDynalist(f.name); }
+			onChooseItem(f: TFolder): void { updateFromDynalist(f.name); }
 		}
 		new RunPicker(this.app).open();
 	}
@@ -1809,11 +1813,11 @@ export default class TrynalistPlugin extends Plugin {
 
 	private pickSelectiveUpdateWith(runs: TFolder[]): void {
 		if (!runs.length) { new Notice("Trynalist: no import folders found. Run an import first."); return; }
-		const plugin = this;
+		const selectiveUpdate = (name: string): void => { void this.selectiveUpdate(name); };
 		class RunPicker extends FuzzySuggestModal<TFolder> {
 			getItems(): TFolder[] { return runs; }
 			getItemText(f: TFolder): string { return f.name; }
-			onChooseItem(f: TFolder): void { void plugin.selectiveUpdate(f.name); }
+			onChooseItem(f: TFolder): void { selectiveUpdate(f.name); }
 		}
 		new RunPicker(this.app).open();
 	}
@@ -1843,18 +1847,18 @@ export default class TrynalistPlugin extends Plugin {
 
 	private pickImportToRetryWith(runs: TFolder[]): void {
 		if (!runs.length) { new Notice("Trynalist: no import folders found."); return; }
-		const plugin = this;
+		const retryFailures = (f: TFolder): void => {
+			void (async () => {
+				const failed = await readFailures(this.app, this.settings.rootFolder, f.name);
+				if (!failed.length) { new Notice(`Trynalist: no recorded failures in "${f.name}".`); return; }
+				new Notice(`Trynalist: retrying ${failed.length} failed document${failed.length === 1 ? "" : "s"}…`);
+				void this.updateFromDynalist(f.name, failed.map((x) => x.id));
+			})();
+		};
 		class RunPicker extends FuzzySuggestModal<TFolder> {
 			getItems(): TFolder[] { return runs; }
 			getItemText(f: TFolder): string { return f.name; }
-			onChooseItem(f: TFolder): void {
-				void (async () => {
-					const failed = await readFailures(plugin.app, plugin.settings.rootFolder, f.name);
-					if (!failed.length) { new Notice(`Trynalist: no recorded failures in "${f.name}".`); return; }
-					new Notice(`Trynalist: retrying ${failed.length} failed document${failed.length === 1 ? "" : "s"}…`);
-					void plugin.updateFromDynalist(f.name, failed.map((x) => x.id));
-				})();
-			}
+			onChooseItem(f: TFolder): void { retryFailures(f); }
 		}
 		new RunPicker(this.app).open();
 	}
@@ -2034,11 +2038,11 @@ export default class TrynalistPlugin extends Plugin {
 			new Notice("Trynalist: no .zip backups found in the vault. Run a backup first, or add the zip to your vault.");
 			return;
 		}
-		const plugin = this;
+		const restoreBackup = (f: TFile): void => { void this.restoreBackup(f); };
 		class ZipPicker extends FuzzySuggestModal<TFile> {
 			getItems(): TFile[] { return zips; }
 			getItemText(f: TFile): string { return f.path; }
-			onChooseItem(f: TFile): void { void plugin.restoreBackup(f); }
+			onChooseItem(f: TFile): void { restoreBackup(f); }
 		}
 		new ZipPicker(this.app).open();
 	}
@@ -2232,8 +2236,11 @@ export default class TrynalistPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		this.settingsBase = null;
-		const data = (await this.loadData()) ?? {};
-		const { reminderState, ...settings } = data as Record<string, unknown>;
+		// loadData() is typed `any`; route it through `unknown` so the merge
+		// below is a checked assertion rather than an any carried forward.
+		const raw: unknown = await this.loadData();
+		const data: Record<string, unknown> = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+		const { reminderState, ...settings } = data;
 		this.settings = { ...DEFAULT_SETTINGS, ...(settings as Partial<TrynalistSettings>) };
 		this.reminderState = (reminderState as ReminderState) ?? {};
 		// The root is a path component everywhere; keep it in the same shape the
@@ -2562,6 +2569,15 @@ class TrynalistSettingTab extends PluginSettingTab {
 		}
 
 		new Setting(containerEl)
+			.setName("Built-in shortcuts")
+			.setDesc("Dynalist-style chords inside a document: Mod+] / Mod+[ zoom, Mod+Up / Mod+Down move, Mod+Shift+C checkbox, Mod+Z structural undo, and the rest. Turn off to set your own in Obsidian's hotkey settings.")
+			.addToggle((t) =>
+				t.setValue(this.plugin.settings.builtinShortcuts).onChange(async (v) => {
+					this.plugin.settings.builtinShortcuts = v;
+					await this.plugin.saveSettings();
+				}),
+			);
+		new Setting(containerEl)
 			.setName("Import documents shared with me")
 			.setDesc("Also import documents others shared with you (not just ones you own).")
 			.addToggle((t) =>
@@ -2728,6 +2744,10 @@ class TrynalistSettingTab extends PluginSettingTab {
 					}),
 			);
 
+		// Declared before use: the dropdown's onChange (below) needs to toggle
+		// the AM/PM row that the block after it creates.
+		let setAmPmVisible: (on: boolean) => void = () => {};
+
 		new Setting(containerEl)
 			.setName("Time format")
 			.addDropdown((d) =>
@@ -2754,7 +2774,7 @@ class TrynalistSettingTab extends PluginSettingTab {
 						this.plugin.refreshDocViews();
 					}),
 				);
-			var setAmPmVisible = (on: boolean) => {
+			setAmPmVisible = (on: boolean) => {
 				amPm.settingEl.toggle(on);
 			};
 			setAmPmVisible(this.plugin.settings.timeFormat === "12");
@@ -2766,7 +2786,6 @@ class TrynalistSettingTab extends PluginSettingTab {
 			.addSlider((sl) =>
 				sl.setLimits(50, 250, 5)
 					.setValue(this.plugin.settings.textScale)
-					.setDynamicTooltip()
 					.onChange(async (v) => {
 						this.plugin.settings.textScale = v;
 						await this.plugin.saveSettings();
@@ -3016,14 +3035,16 @@ class TrynalistSettingTab extends PluginSettingTab {
 					});
 					chip.setAttribute("aria-pressed", on ? "true" : "false");
 					chip.setAttribute("aria-label", `${label} — ${on ? "quiet" : "not quiet"}`);
-					chip.addEventListener("click", async (e) => {
-						e.preventDefault();
-						const list = new Set(this.plugin.settings.quietDays ?? []);
-						if (list.has(iso)) list.delete(iso); else list.add(iso);
-						// Sorted, so the stored order does not depend on click order.
-						this.plugin.settings.quietDays = [...list].sort((a, b) => a - b);
-						await this.plugin.saveSettings();
-						paintDays();
+					chip.addEventListener("click", (e) => {
+						void (async () => {
+							e.preventDefault();
+							const list = new Set(this.plugin.settings.quietDays ?? []);
+							if (list.has(iso)) list.delete(iso); else list.add(iso);
+							// Sorted, so the stored order does not depend on click order.
+							this.plugin.settings.quietDays = [...list].sort((a, b) => a - b);
+							await this.plugin.saveSettings();
+							paintDays();
+						})();
 					});
 				}
 			};
@@ -3074,15 +3095,19 @@ class TrynalistSettingTab extends PluginSettingTab {
 					.setDisabled(true);
 			})
 			.addButton((b) =>
-				b.setButtonText("Choose…").onClick(async () => {
-					const modal = new DocSuggestModal(this.app, this.plugin.settings.rootFolder, async (doc) => {
-						this.plugin.settings.inboxDocPath = doc.file.path;
-						await this.plugin.saveSettings();
-						// One field changed; setting its value is the whole job.
-						inboxField?.setValue(doc.file.path.split("/").pop() ?? doc.file.path);
-					});
-					await modal.load();
-					modal.open();
+				b.setButtonText("Choose…").onClick(() => {
+					void (async () => {
+						const modal = new DocSuggestModal(this.app, this.plugin.settings.rootFolder, (doc) => {
+							void (async () => {
+								this.plugin.settings.inboxDocPath = doc.file.path;
+								await this.plugin.saveSettings();
+								// One field changed; setting its value is the whole job.
+								inboxField?.setValue(doc.file.path.split("/").pop() ?? doc.file.path);
+							})();
+						});
+						await modal.load();
+						modal.open();
+					})();
 				}),
 			);
 

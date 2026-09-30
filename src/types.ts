@@ -311,6 +311,12 @@ export interface TrynalistSettings {
 	 *  Obsidian exposes no readable 'always open in new tab' preference —
 	 *  only `focusNewTab`, which is a different question — so this is ours. */
 	openInNewTab: boolean;
+	/** Built-in Dynalist-style chords (Mod+] zoom, Mod+Up move, Mod+Shift+C
+	 *  checkbox, Mod+Z structural undo…). They are claimed by the document
+	 *  view's own keymap scope, only while the keyboard is inside a document,
+	 *  so they never shadow Obsidian elsewhere. Turn off to bind your own in
+	 *  Obsidian's hotkey settings instead. */
+	builtinShortcuts: boolean;
 	/** Mobile toolbar contents, in order. Ids from TOOLBAR_ACTIONS; an empty
 	 *  array means "use the default set", so a fresh install and a deliberate
 	 *  reset behave the same. */
@@ -427,6 +433,7 @@ export interface TrynalistSettings {
 
 export const DEFAULT_SETTINGS: TrynalistSettings = {
 	openInNewTab: true,
+	builtinShortcuts: true,
 	mobileToolbar: [],
 	itemMenuOrder: [],
 	itemMenuHidden: [],

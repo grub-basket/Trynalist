@@ -676,7 +676,7 @@ export async function updateExistingImport(
 		for (const c of folder.children) {
 			if (c instanceof TFolder) { noteHome(c); continue; }
 			if (!(c instanceof TFile) || c.extension !== "md") continue;
-			const id = app.metadataCache.getFileCache(c)?.frontmatter?.dlId;
+			const id: unknown = app.metadataCache.getFileCache(c)?.frontmatter?.dlId;
 			if (typeof id !== "string" || !id) continue;
 			const homes = dlHome.get(id) ?? new Set<string>();
 			homes.add(c.parent?.path ?? "");

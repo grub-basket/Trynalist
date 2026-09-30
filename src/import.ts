@@ -42,9 +42,6 @@ function blank(text = ""): ImportNode {
 	return { text, note: "", checked: false, checkbox: false, collapsed: false, heading: 0, color: 0, children: [] };
 }
 
-function countNodes(nodes: ImportNode[]): number {
-	return nodes.reduce((n, node) => n + 1 + countNodes(node.children), 0);
-}
 
 // ── OPML (Dynalist's "Export as OPML") ──────────────────────────────────
 

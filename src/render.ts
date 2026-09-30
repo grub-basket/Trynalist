@@ -45,12 +45,12 @@ export interface InlineContext {
  *  Note italics are `__like this__`, NOT `*like this*` — Dynalist deliberately
  *  differs from CommonMark here, and imported documents rely on it. */
 const RULES: Array<{ name: string; re: RegExp }> = [
-	{ name: "embed", re: /!\[\[([^\[\]|]+)(?:\|([^\[\]]+))?\]\]/ },
+	{ name: "embed", re: /!\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/ },
 	{ name: "image", re: /!\[([^\]]*)\]\(([^)\s]+)\)/ },
-	{ name: "wikilink", re: /\[\[([^\[\]|]+)(?:\|([^\[\]]+))?\]\]/ },
+	{ name: "wikilink", re: /\[\[([^[\]|]+)(?:\|([^[\]]+))?\]\]/ },
 	// The label class excludes `[` as well as `]`: otherwise a run of "["
 	// made every start position scan to the end — quadratic (L72).
-	{ name: "link", re: /\[([^\[\]]+)\]\(([^)\s]+)\)/ },
+	{ name: "link", re: /\[([^[\]]+)\]\(([^)\s]+)\)/ },
 	{ name: "date", re: DATE_RE },
 	{ name: "code", re: /`([^`]+)`/ },
 	{ name: "math", re: /\$\$([^$]+)\$\$/ },

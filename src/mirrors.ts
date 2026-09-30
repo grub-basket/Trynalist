@@ -1,5 +1,5 @@
 import { App, TFile, TFolder } from "obsidian";
-import { DocIndex, listDocs } from "./store";
+import { DocIndex, idToString, listDocs } from "./store";
 import { formatMirrorRef, parseMirrorRef } from "./types";
 import type { DocManifest, MirrorRef, TreeNode, TrynaId } from "./types";
 
@@ -64,8 +64,8 @@ export class MirrorResolver {
 	private locate(itemId: TrynaId): string | null {
 		for (const file of this.app.vault.getFiles()) {
 			if (file.extension !== "md" || !file.parent) continue;
-			const id = this.app.metadataCache.getFileCache(file)?.frontmatter?.id;
-			if (id === undefined || String(id) !== itemId) continue;
+			const id: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.id;
+			if (id === undefined || idToString(id as string | number) !== itemId) continue;
 			const manifest = file.parent.children.find(
 				(c): c is TFile => c instanceof TFile && c.extension === "trynalist",
 			);
@@ -216,7 +216,7 @@ export async function findMirrorsOf(
 		let count = 0;
 		for (const child of doc.folder.children) {
 			if (!(child instanceof TFile) || child.extension !== "md") continue;
-			const raw = app.metadataCache.getFileCache(child)?.frontmatter?.mirrorOf;
+			const raw: unknown = app.metadataCache.getFileCache(child)?.frontmatter?.mirrorOf;
 			if (typeof raw !== "string") continue;
 			const ref = parseMirrorRef(raw);
 			if (ref && itemIds.has(ref.itemId)) count++;

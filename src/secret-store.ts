@@ -1,4 +1,10 @@
 import type { App } from "obsidian";
+// Electron's safeStorage API deals in Node Buffers; `Buffer` is a real
+// global in Obsidian's (desktop-only) renderer, but a value `import` of the
+// "buffer" module is a Node built-in the store lint flags (not available on
+// mobile) and the bundler can't resolve. This is a type-only reference to
+// the ambient global, so no module is actually imported at runtime.
+declare const Buffer: typeof import("buffer").Buffer;
 
 /** Token storage backed by Obsidian's own keychain API (`app.secretStorage`,
  *  since 1.11.4). The secret lives in the OS keychain, NOT in this plugin's
@@ -95,7 +101,11 @@ export function legacyDecrypt(b64: string): string | null {
 	try {
 		const req = (window as unknown as { require?: (m: string) => unknown }).require;
 		if (typeof req !== "function") return null;
-		const electron = req("electron") as { remote?: { safeStorage?: { decryptString(b: Buffer): string } }; safeStorage?: { decryptString(b: Buffer): string } } | null;
+		// `Uint8Array`, not `Buffer`, in this inline type: a Buffer instance is a
+		// Uint8Array, this cast only has to describe what we call it with, and
+		// the base `no-undef` lint rule (unlike tsc) cannot see the `declare
+		// const Buffer` above from inside a type position.
+		const electron = req("electron") as { remote?: { safeStorage?: { decryptString(b: Uint8Array): string } }; safeStorage?: { decryptString(b: Uint8Array): string } } | null;
 		const ss = electron?.safeStorage ?? electron?.remote?.safeStorage;
 		if (!ss) return null;
 		return ss.decryptString(Buffer.from(b64, "base64"));

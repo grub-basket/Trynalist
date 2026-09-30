@@ -4,6 +4,20 @@ import { DocIndex } from "./store";
 import { safeName } from "./id-service";
 import type { TreeNode } from "./types";
 import { resolveAll } from "./mirrors";
+
+// The installed fflate types declare their return values with the TS 5.7+
+// generic `Uint8Array<TArrayBuffer>` syntax, which the store-lint tool's own
+// bundled (older) TypeScript cannot parse — see the matching comment in
+// backup.ts. These thin wrappers, round-tripped through `unknown`, keep both
+// TS versions satisfied without changing what gets zipped.
+function zipSyncTyped(data: Record<string, Uint8Array>): Uint8Array {
+	const result: unknown = zipSync(data);
+	return result as Uint8Array;
+}
+function strToU8Typed(str: string): Uint8Array {
+	const result: unknown = strToU8(str);
+	return result as Uint8Array;
+}
 import type { Resolved } from "./mirrors";
 
 /** Render a doc as a plain Markdown outline (Dynalist-export style):
@@ -111,9 +125,9 @@ export async function exportDocZip(app: App, index: DocIndex): Promise<string> {
 		exported: new Date().toISOString(),
 		nodes: [...index.nodes.values()].map(nodeJson),
 	};
-	const zipped = zipSync({
-		"outline.md": strToU8(md),
-		"meta.json": strToU8(JSON.stringify(meta, null, 2)),
+	const zipped = zipSyncTyped({
+		"outline.md": strToU8Typed(md),
+		"meta.json": strToU8Typed(JSON.stringify(meta, null, 2)),
 	});
 	const base = normalizePath(
 		`${index.docRef.folder.parent?.path ?? ""}/${exportName(index)}.trynalist.zip`,
@@ -123,7 +137,13 @@ export async function exportDocZip(app: App, index: DocIndex): Promise<string> {
 	while (app.vault.getAbstractFileByPath(path)) {
 		path = base.replace(/\.trynalist\.zip$/, ` ${n++}.trynalist.zip`);
 	}
-	const buf = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer;
+	// `unknown` round-trip rather than a direct `as ArrayBuffer`: this TS
+	// version and the store-lint tool's own (older) TS disagree on whether
+	// `.buffer` here is already an `ArrayBuffer` or the broader
+	// `ArrayBufferLike`, so a direct assertion is "necessary" on one and
+	// "unnecessary" on the other. Going through `unknown` satisfies both.
+	const rawBuf: unknown = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength);
+	const buf = rawBuf as ArrayBuffer;
 	await app.vault.createBinary(path, buf);
 	new Notice(`Trynalist: exported ${path}`);
 	return path;

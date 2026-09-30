@@ -380,9 +380,7 @@ export class DynalistTokenModal extends Modal {
 		intro.createEl("a", { text: "dynalist.io/developer", href: "https://dynalist.io/developer" });
 		intro.appendText(" (Generate → copy the secret). Trynalist only READS your Dynalist.");
 
-		let field: import("obsidian").TextComponent | null = null;
 		new Setting(this.contentEl).setName("API token").addText((t) => {
-			field = t;
 			t.setPlaceholder("Secret token").onChange((v) => (this.token = v));
 			t.inputEl.type = "password";
 			t.inputEl.addClass("trynalist-full-width");

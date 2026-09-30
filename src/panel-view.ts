@@ -764,29 +764,31 @@ export class TrynalistPanelView extends ItemView {
 	private async importOpml(): Promise<void> {
 		const input = createEl("input", { type: "file" });
 		input.accept = ".opml,.xml,.json,.txt,.md";
-		input.addEventListener("change", async () => {
-			const file = input.files?.[0];
-			if (!file) return;
-			try {
-				const text = await file.text();
-				const parsed = parseImport(file.name, text);
-				if (!parsed.roots.length) {
-					new Notice(`Trynalist: found nothing to import in "${file.name}".`);
-					return;
+		input.addEventListener("change", () => {
+			void (async () => {
+				const file = input.files?.[0];
+				if (!file) return;
+				try {
+					const text = await file.text();
+					const parsed = parseImport(file.name, text);
+					if (!parsed.roots.length) {
+						new Notice(`Trynalist: found nothing to import in "${file.name}".`);
+						return;
+					}
+					const { doc, items } = await writeImport(this.app, this.plugin.settings.rootFolder, parsed);
+					this.lastSignature = "";
+					this.scheduleRender();
+					// Warnings are surfaced, not swallowed — an import that quietly
+					// dropped content would be the worst kind of success.
+					const warn = parsed.warnings.length ? ` (${parsed.warnings.length} warning${parsed.warnings.length === 1 ? "" : "s"} — see console)` : "";
+					if (parsed.warnings.length) console.warn("Trynalist import warnings", parsed.warnings);
+					new Notice(`Trynalist: imported ${items} items as "${doc.manifest.title}"${warn}.`, 8000);
+					await this.plugin.openDoc(doc);
+				} catch (e) {
+					console.error("Trynalist: import failed", e);
+					new Notice(`Trynalist: could not import "${file.name}" — see console.`);
 				}
-				const { doc, items } = await writeImport(this.app, this.plugin.settings.rootFolder, parsed);
-				this.lastSignature = "";
-				this.scheduleRender();
-				// Warnings are surfaced, not swallowed — an import that quietly
-				// dropped content would be the worst kind of success.
-				const warn = parsed.warnings.length ? ` (${parsed.warnings.length} warning${parsed.warnings.length === 1 ? "" : "s"} — see console)` : "";
-				if (parsed.warnings.length) console.warn("Trynalist import warnings", parsed.warnings);
-				new Notice(`Trynalist: imported ${items} items as "${doc.manifest.title}"${warn}.`, 8000);
-				await this.plugin.openDoc(doc);
-			} catch (e) {
-				console.error("Trynalist: import failed", e);
-				new Notice(`Trynalist: could not import "${file.name}" — see console.`);
-			}
+			})();
 		});
 		input.click();
 	}

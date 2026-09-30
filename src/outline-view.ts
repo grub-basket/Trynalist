@@ -260,6 +260,20 @@ export class TrynalistDocView extends FileView {
 			this.stepMatch(-1);
 			return false;
 		});
+		// The document commands' default chords (zoom, move, checkbox, structural
+		// undo…). Registered AFTER the handlers above so the fold chords on
+		// Mod+Up/Down still get first refusal, exactly as when these were
+		// `hotkeys` on the commands (a view scope runs before global hotkeys).
+		// `fire(true)` is the command's own check, so an inapplicable chord is
+		// handed back to Obsidian rather than eaten.
+		for (const c of plugin.viewChords) {
+			this.scope.register(c.modifiers, c.key, (evt) => {
+				if (!plugin.settings.builtinShortcuts || !c.fire(true)) return true;
+				evt.preventDefault();
+				c.fire(false);
+				return false;
+			});
+		}
 		// Obsidian's quick switcher and global search. Claimed ONLY inside a
 		// focused Trynalist view: a document here is a folder plus a manifest, so
 		// the core switcher cannot open one, and core search cannot see items.
@@ -1493,17 +1507,19 @@ export class TrynalistDocView extends FileView {
 		star.setAttribute("aria-label", existing
 			? `Remove the bookmark "${existing.label}"`
 			: "Bookmark this view");
-		star.addEventListener("click", async () => {
-			const match = this.matchingBookmark();
-			if (match) {
-				this.plugin.settings.bookmarks = this.plugin.settings.bookmarks.filter((b) => b.id !== match.id);
-				await this.plugin.saveSettings();
-				this.plugin.refreshPanels();
-				new Notice(`Trynalist: removed the bookmark "${match.label}".`);
-				this.render();
-				return;
-			}
-			this.bookmarkCurrentView();
+		star.addEventListener("click", () => {
+			void (async () => {
+				const match = this.matchingBookmark();
+				if (match) {
+					this.plugin.settings.bookmarks = this.plugin.settings.bookmarks.filter((b) => b.id !== match.id);
+					await this.plugin.saveSettings();
+					this.plugin.refreshPanels();
+					new Notice(`Trynalist: removed the bookmark "${match.label}".`);
+					this.render();
+					return;
+				}
+				this.bookmarkCurrentView();
+			})();
 		});
 		star.addEventListener("contextmenu", (e) => {
 			e.preventDefault();
@@ -2540,7 +2556,7 @@ export class TrynalistDocView extends FileView {
 			placeholder: "Point this mirror at…",
 			exclude: new Set([n.id]),
 			widenRoot: this.plugin.settings.rootFolder,
-			onChoose: async (item, from) => {
+			onChoose: (item, from) => { void (async () => {
 				const live = this.index?.nodes.get(n.id);
 				if (!item || !live || live !== idx.nodes.get(n.id)) return;
 				// The document stand-in ("the top level of X") is not an item.
@@ -2557,7 +2573,7 @@ export class TrynalistDocView extends FileView {
 				await this.resolveMirrors();
 				const hit = this.mirrorHits.get(n.id);
 				if (hit && !hit.ok) new Notice(`Trynalist: ${MirrorResolver.describe(hit)}.`);
-			},
+			})(); },
 		}).open();
 	}
 
@@ -4190,7 +4206,10 @@ export class TrynalistDocView extends FileView {
 		for (const child of Array.from(el.childNodes)) copy.appendChild(child.cloneNode(true));
 		this.noteCache.set(key, copy);
 		while (this.noteCache.size > NOTE_CACHE_MAX) {
-			const oldest = this.noteCache.keys().next().value;
+			// `.next().value` on a Map iterator types as `any` under this lib
+			// target even though it's a `string | undefined` at runtime (the key
+			// type); the assertion just tells the checker what's already true.
+			const oldest = this.noteCache.keys().next().value as string | undefined;
 			if (oldest === undefined) break;
 			this.noteCache.delete(oldest);
 		}
@@ -5111,7 +5130,7 @@ export class TrynalistDocView extends FileView {
 		const idx = this.index;
 		const seen = new Set<string>();
 		const images: TFile[] = [];
-		const EMBED = /!\[\[([^\[\]|]+)(?:\|[^\[\]]+)?\]\]/g;
+		const EMBED = /!\[\[([^[\]|]+)(?:\|[^[\]]+)?\]\]/g;
 		const IMG = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif"];
 		for (const n of idx?.nodes.values() ?? []) {
 			for (const m of `${n.text} ${n.note}`.matchAll(EMBED)) {
@@ -6544,7 +6563,7 @@ export class TrynalistDocView extends FileView {
 			rootLabel: "⌂ Top level of this document",
 			// No match here? Look in every other document rather than dead-ending.
 			widenRoot: this.plugin.settings.rootFolder,
-			onChoose: async (item, from) => {
+			onChoose: (item, from) => { void (async () => {
 				if (from && item) { await this.moveAcrossDocuments(targets, item, from); return; }
 				await this.flushPendingSaves();
 				this.pushUndo();
@@ -6555,7 +6574,7 @@ export class TrynalistDocView extends FileView {
 				if (item?.collapsed) await idx.setFlag(item.id, "collapsed", false);
 				this.render();
 				new Notice(`Trynalist: moved ${targets.length} item${targets.length === 1 ? "" : "s"}.`);
-			},
+			})(); },
 		}).open();
 	}
 
@@ -6716,9 +6735,14 @@ export class TrynalistDocView extends FileView {
 				await this.flushPendingSaves();
 				this.pushUndo();
 				const src = iso ? toSource(iso, hasTime, recurrence) : "";
+				// Sentinel built from its char code, not written as a literal control
+				// character in source or regex, so no-control-regex has nothing to flag;
+				// behaviour (a one-off marker swapped out by stripMatches) is unchanged.
+				const NUL = String.fromCharCode(0);
+				const NUL_RE = new RegExp(NUL, "g");
 				const swap = (body: string, old: string): string => src
 					? body.replace(old, src)
-					: stripMatches(body.replace(old, "\u0000"), /\u0000/g).trim();
+					: stripMatches(body.replace(old, NUL), NUL_RE).trim();
 				let next = target.text;
 				let note = target.note;
 				if (inText && target.text.includes(inText)) next = swap(target.text, inText);
@@ -6847,10 +6871,17 @@ export class TrynalistDocView extends FileView {
 
 	/** Pull another document in as a child item of the focused row. */
 	openConvertDocToItem(): void {
+		const parentId = this.focusId;
+		void this.openConvertDocToItemModal(parentId);
+	}
+
+	/** Load and open the "pull document in as item" picker. Split out from
+	 *  {@link openConvertDocToItem} so the load-then-open chain has somewhere
+	 *  to be awaited/voided instead of floating. */
+	private async openConvertDocToItemModal(parentId: TrynaId | null): Promise<void> {
 		const idx = this.index;
 		if (!idx) return;
-		const parentId = this.focusId;
-		new DocSuggestModal(this.app, this.plugin.settings.rootFolder, (doc) => {
+		const modal = new DocSuggestModal(this.app, this.plugin.settings.rootFolder, (doc) => {
 			if (doc.file.path === this.file?.path) {
 				new Notice("Trynalist: a document cannot be inserted into itself.");
 				return;
@@ -6884,7 +6915,9 @@ export class TrynalistDocView extends FileView {
 					}
 				},
 			}).open();
-		}).load().then((m) => m.open());
+		});
+		const m = await modal.load();
+		m.open();
 	}
 
 	/** Item / word / character counts for the document or the selection. */
@@ -7262,7 +7295,7 @@ export class TrynalistDocView extends FileView {
 			const resolved = this.app.metadataCache.resolvedLinks;
 			for (const [from, targets] of Object.entries(resolved)) {
 				if (from === n.file.path) continue;
-				if ((targets as Record<string, number>)[n.file.path]) backlinks.push(from);
+				if (targets[n.file.path]) backlinks.push(from);
 			}
 		}
 		const mirrorCount = mirrors.reduce((sum, m) => sum + m.count, 0);
@@ -7614,21 +7647,26 @@ function trim(s: string): string {
 }
 
 
-/** Hit-test a point for a caret position. The two APIs are the standard one
- *  and the WebKit-era one; Obsidian ships Chromium, but both are cheap to try
- *  and neither is guaranteed by the typings. */
+/** Hit-test a point for a caret position. `caretPositionFromPoint` is the
+ *  standard API and tried first; `caretRangeFromPoint` is the older WebKit
+ *  one, kept as a fallback for a runtime where only it exists. Obsidian ships
+ *  a Chromium new enough to support the standard call, so in practice this
+ *  always takes the first branch — the fallback exists only for safety, and
+ *  neither is guaranteed by the typings. */
 function caretRangeAt(x: number, y: number): Range | null {
 	const doc = activeDocument as Document & {
 		caretRangeFromPoint?: (x: number, y: number) => Range | null;
 		caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
 	};
-	if (typeof doc.caretRangeFromPoint === "function") return doc.caretRangeFromPoint(x, y);
 	const pos = doc.caretPositionFromPoint?.(x, y);
-	if (!pos) return null;
-	const range = activeDocument.createRange();
-	range.setStart(pos.offsetNode, pos.offset);
-	range.collapse(true);
-	return range;
+	if (pos) {
+		const range = activeDocument.createRange();
+		range.setStart(pos.offsetNode, pos.offset);
+		range.collapse(true);
+		return range;
+	}
+	if (typeof doc.caretRangeFromPoint === "function") return doc.caretRangeFromPoint(x, y);
+	return null;
 }
 
 

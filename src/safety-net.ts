@@ -168,7 +168,10 @@ export class SafetyNet {
 			const { bytes, fileCount } = await buildCollectionZip(this.app, root, { outlineOnly: !includeAttachments });
 			if (!fileCount) return null;
 			const path = `${dir}/${stamp()}.zip`;
-			const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+			// Copy into a fresh ArrayBuffer: no cast needed, and it works whether the
+			// zip bytes came back on a plain or a shared buffer.
+			const ab = new ArrayBuffer(bytes.byteLength);
+			new Uint8Array(ab).set(bytes);
 			await adapter.writeBinary(path, ab);
 			return path;
 		} catch (e) {

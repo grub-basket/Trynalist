@@ -1,4 +1,4 @@
-import { App, Notice, TFile, moment } from "obsidian";
+import { App, TFile, moment } from "obsidian";
 import { listDocs } from "./store";
 import { isOverdue, parseAllDates, withoutLinks } from "./dates";
 import type { DocRef, TrynalistSettings } from "./types";
@@ -39,7 +39,7 @@ export async function collectDue(
 			// A hand-written `due: 2024` parses as a number; moment() on it then
 			// threw and took every reminder and the whole agenda down (L32).
 			if (!fm?.id || typeof fm.due !== "string" || !fm.due || fm.checked) continue;
-			const due = moment(fm.due as string);
+			const due = moment(fm.due);
 			if (!due.isValid() || due.isAfter(limit) || due.isBefore(floor)) continue;
 			out.push({
 				docPath: doc.file.path,
@@ -49,7 +49,7 @@ export async function collectDue(
 				// Filled in below from the file body — the filename is a slug and
 				// mangles punctuation, which made the agenda unreadable.
 				text: "",
-				due: fm.due as string,
+				due: fm.due,
 				hasTime: true,
 				overdue: due.isBefore(moment()),
 			});
