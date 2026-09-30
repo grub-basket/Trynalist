@@ -1,7 +1,7 @@
 {
 	"id": "trynalist",
 	"name": "Trynalist",
-	"version": "0.80.0",
+	"version": "0.80.1",
 	"minAppVersion": "1.11.4",
 	"description": "A Dynalist-style outliner backed by your vault: every line is a Markdown note with full metadata, organized into zoomable outline documents.",
 	"author": "Human",

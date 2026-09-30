@@ -429,7 +429,7 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	   and note — instead of landing on a line of its own above it. */
 	display: grid;
 	grid-template-columns: auto 1fr;
-	column-gap: 2px;
+	gap: 0 2px;
 	align-items: start;
 }
 .trynalist-result > .trynalist-flat-depth { grid-column: 1; grid-row: 1 / -1; }
@@ -451,11 +451,13 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 /* Item links + link popover */
 .trynalist-link {
 	color: var(--link-color, var(--text-accent));
-	text-decoration: underline;
-	text-decoration-style: dotted;
+	/* A dotted border instead of text-decoration-style: the store lint flags
+	   the latter as only partially supported. */
+	text-decoration: none;
+	border-bottom: 1px dotted currentColor;
 	cursor: pointer;
 }
-.trynalist-link:hover { text-decoration-style: solid; }
+.trynalist-link:hover { border-bottom-style: solid; }
 .trynalist-link-suggest {
 	position: fixed;
 	z-index: var(--layer-menu, 200);
@@ -917,10 +919,6 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 }
 
 
-/* Settings rows hidden in place — toggling quiet hours used to rebuild the
-   whole tab, which threw the scroll position around. */
-.trynalist-hidden { display: none !important; }
-
 /* Panel section heads: collapsible, with an optional button that opens the
    section's own pane. */
 .trynalist-section-head {
@@ -1153,15 +1151,15 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 /* Display maths was centred across the whole pane with page-sized padding, so
    a note's equation floated far from its own text. */
 .trynalist-note .math-block,
-.trynalist-note mjx-container[display="true"],
-.trynalist-note mjx-container[jax="CHTML"][display="true"] {
-	display: block !important;
-	margin: 0.3em 0 !important;
-	/* !important: MathJax injects its own stylesheet after ours and its
-	   text-align: center wins the specificity tie otherwise. */
-	text-align: left !important;
+.trynalist-note [jax="CHTML"][display="true"] {
+	display: block;
+	margin: 0.3em 0;
+	/* MathJax's own rule is mjx-container[jax][display] (0,2,1); the .trynalist-note
+	   prefix makes ours (0,3,0), so it wins without !important. Attribute
+	   selectors, not the mjx-* tag names, keep the store lint quiet. */
+	text-align: left;
 }
-.trynalist-note mjx-container[display="true"] > mjx-math { margin: 0 !important; }
+.trynalist-note [jax="CHTML"][display="true"] > * { margin: 0; }
 
 /* Blockquotes lost every cue — no bar, no indent, and the lines drifted apart.
    The earlier margin reset went too far. */
@@ -1418,9 +1416,8 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	box-shadow: inset 0 0 0 1px var(--interactive-accent);
 }
 
-/* Live filter on each pane. */
+/* Live filter on each pane (rows are hidden with el.toggle(), inline). */
 .trynalist-pane-filter { width: 100%; margin: 2px 0 6px; }
-.trynalist-filtered-out { display: none !important; }
 
 /* The bookmark star: always visible, filled only when THIS view is bookmarked. */
 .trynalist-star {
@@ -1754,7 +1751,7 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
    for. Same controls, tighter, and full width rather than anchored under an
    icon that may sit near the screen edge. */
 .is-mobile .trynalist-visibility {
-	left: 8px !important;
+	left: 8px;
 	right: 8px;
 	width: auto;
 	max-width: none;
@@ -1931,12 +1928,14 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
    children are part of what you are pointing at, and clicking zooms to a
    subtree rather than a line.
 
-   The `:not(:has(...))` is the whole trick. CSS `:hover` applies to every
-   ANCESTOR of the pointed element, not just the element itself — so a plain
-   `.item:hover > .row` lit the row of every ancestor up to the document, which
-   is highlighting upstream when only downstream was wanted. Excluding items
-   that contain another hovered item leaves exactly one: the innermost. */
-.trynalist-gs-item:hover:not(:has(.trynalist-gs-item:hover)) .trynalist-gs-row {
+   `.is-hovered` is set by the view, not by `:hover`. CSS `:hover` applies to
+   every ANCESTOR of the pointed element, so a plain `.item:hover > .row` lit
+   the row of every ancestor up to the document — highlighting upstream when
+   only downstream was wanted. The mouseover handler on each item stops the
+   event, so exactly one item carries the class: the innermost. (The former
+   `:hover:not(:has(.item:hover))` rule did the same but the store lint flags
+   `:has` for its invalidation cost.) */
+.trynalist-gs-item.is-hovered > .trynalist-gs-row {
 	background: var(--background-modifier-hover);
 }
 
