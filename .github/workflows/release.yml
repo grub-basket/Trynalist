@@ -63,6 +63,20 @@ jobs:
             echo "::warning::released tags missing from versions.json:$MISSING"
           fi
 
+      # The store's build verification compares the release asset with a build
+      # from source, so the asset is built here, not taken from the committed
+      # main.js (which stays in the repo for reference and BRAT-from-source).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Build main.js from source
+        run: |
+          npm ci
+          npm run build
+          test -s main.js
+
       - name: Tag, release, and upload the assets BRAT needs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
