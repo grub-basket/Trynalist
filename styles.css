@@ -139,8 +139,6 @@
 .trynalist-collapse { opacity: 0; transition: opacity 90ms ease; }
 .trynalist-row:hover .trynalist-collapse,
 .trynalist-row:focus-within .trynalist-collapse { opacity: 1; }
-.trynalist-bullet.has-hidden-children ~ .trynalist-collapse,
-.trynalist-row:has(.has-hidden-children) .trynalist-collapse { opacity: 1; }
 .trynalist-bullet {
 	width: 22px;
 	height: 22px;
@@ -543,6 +541,10 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	text-overflow: ellipsis;
 	max-width: 100%;
 }
+/* ...but while it is being edited (raw source, not rendered) it needs its
+   line breaks: under nowrap, innerText reads every break as a space and the
+   blur save wrote the note back as one line. */
+.trynalist-note.is-one-line:not([data-rendered="1"]) { white-space: pre-wrap; }
 
 /* Dates */
 .trynalist-date {
@@ -1355,8 +1357,11 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	font-weight: var(--font-semibold);
 	line-height: 1.3;
 }
-.trynalist-list.is-outline > .trynalist-zoom-root + .trynalist-item,
-.trynalist-list.is-outline > .trynalist-zoom-root ~ .trynalist-item {
+/* A class on the list rather than `.trynalist-zoom-root ~ .trynalist-item`:
+   a general-sibling selector makes the browser restyle every later sibling
+   whenever one row is inserted, which was a third of the cost of pressing
+   Enter at the top level of a long document. */
+.trynalist-list.is-outline.has-zoom-root > .trynalist-item:not(.trynalist-zoom-root) {
 	padding-left: 16px;
 }
 
@@ -2211,3 +2216,21 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 .trynalist-docselect-body { min-width: 0; }
 .trynalist-docselect-title { color: var(--text-normal); }
 .trynalist-docselect-path { font-size: var(--font-ui-smaller); color: var(--text-faint); }
+
+/* Full-width inputs in modals (the store lint rejects inline style assignment). */
+.trynalist-docselect-search,
+.trynalist-full-width { width: 100%; }
+
+/* Mind map: shown when a large outline was drawn with folded branches. */
+.trynalist-mindmap-banner {
+	position: sticky;
+	top: 0;
+	left: 0;
+	z-index: 2;
+	margin: 0 0 8px;
+	padding: 4px 8px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+}
