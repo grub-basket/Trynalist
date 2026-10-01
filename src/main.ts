@@ -57,7 +57,7 @@ export default class TrynalistPlugin extends Plugin {
 	 *  the keyboard is inside a document, and off entirely when the
 	 *  `builtinShortcuts` setting is. `fire(true)` asks whether the command
 	 *  applies right now, exactly like a checkCallback. */
-	viewChords: Array<{ modifiers: Modifier[]; key: string; fire: (checking: boolean) => boolean }> = [];
+	viewChords: Array<{ name: string; modifiers: Modifier[]; key: string; fire: (checking: boolean) => boolean }> = [];
 	safetyNet: SafetyNet | null = null;
 	itemHistory: ItemHistory | null = null;
 	/** True while a Dynalist import runs, so a second can't start on top of it.
@@ -275,7 +275,7 @@ export default class TrynalistPlugin extends Plugin {
 			hotkeys: Array<{ modifiers: Modifier[]; key: string }>,
 		) => {
 			this.addCommand({ id, name, checkCallback });
-			for (const h of hotkeys) this.viewChords.push({ ...h, fire: checkCallback });
+			for (const h of hotkeys) this.viewChords.push({ ...h, name, fire: checkCallback });
 		};
 		chorded("undo-structural", "Undo last structural change", (checking) => {
 			const view = this.activeFocusedDoc();
@@ -2436,6 +2436,38 @@ class TrynalistSettingTab extends PluginSettingTab {
 		super(plugin.app, plugin);
 	}
 
+	/** Read-only list of the built-in chords, so anyone who turns them off (or
+	 *  wants one outside a document) has a ready-made scheme to copy into
+	 *  Obsidian's Hotkeys settings. Read from `viewChords`, the same list the
+	 *  document view registers, so it can never drift from what actually fires. */
+	private renderShortcutReference(containerEl: HTMLElement): void {
+		const details = containerEl.createEl("details", { cls: "trynalist-shortcut-ref" });
+		details.createEl("summary", { text: "Shortcut reference" });
+		details.createEl("p", {
+			cls: "setting-item-description",
+			text: "These are the built-in chords. To use one when built-in shortcuts are off, or to change it, assign it in the hotkey settings: search for this plugin's name.",
+		});
+		const mac = Platform.isMacOS;
+		const label = (m: Modifier): string => {
+			if (m === "Mod") return mac ? "⌘" : "Ctrl";
+			if (m === "Meta") return mac ? "⌘" : "Win";
+			if (m === "Shift") return mac ? "⇧" : "Shift";
+			if (m === "Alt") return mac ? "⌥" : "Alt";
+			return mac ? "⌃" : "Ctrl";
+		};
+		const keyLabel = (k: string): string =>
+			({ ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", Enter: "Enter", Backspace: "Backspace" } as Record<string, string>)[k]
+			?? (k.length === 1 ? k.toUpperCase() : k);
+		const table = details.createEl("table");
+		for (const c of this.plugin.viewChords) {
+			const row = table.createEl("tr");
+			row.createEl("td", { text: c.name });
+			row.createEl("td").createEl("kbd", {
+				text: [...c.modifiers.map(label), keyLabel(c.key)].join(mac ? "" : "+"),
+			});
+		}
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -2577,6 +2609,7 @@ class TrynalistSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}),
 			);
+		this.renderShortcutReference(containerEl);
 		new Setting(containerEl)
 			.setName("Import documents shared with me")
 			.setDesc("Also import documents others shared with you (not just ones you own).")

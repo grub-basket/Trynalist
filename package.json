@@ -1,6 +1,6 @@
 {
 	"name": "trynalist",
-	"version": "0.81.0",
+	"version": "0.82.0",
 	"description": "A Dynalist-style outliner plugin for Obsidian.",
 	"main": "main.js",
 	"scripts": {

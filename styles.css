@@ -2336,3 +2336,10 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	margin-left: auto;
 	color: var(--text-faint);
 }
+
+/* Settings: read-only list of the built-in chords. */
+.trynalist-shortcut-ref { margin: 4px 0 12px; }
+.trynalist-shortcut-ref > summary { cursor: pointer; font-weight: var(--font-semibold); padding: 4px 0; }
+.trynalist-shortcut-ref table { width: 100%; border-collapse: collapse; font-size: var(--font-ui-small); }
+.trynalist-shortcut-ref td { padding: 3px 6px; border-bottom: 1px solid var(--background-modifier-border); }
+.trynalist-shortcut-ref td:last-child { text-align: right; white-space: nowrap; }
