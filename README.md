@@ -5,11 +5,18 @@ Markdown note in your vault, so nothing is locked inside the plugin.
 
 *Trynalist*, short for **Tryin' to make an Obsidian plugin based on Dynalist**.
 
-> **Beta.** This is distributed for testing through BRAT and is not in the
-> Obsidian community plugin store. Expect rough edges, and keep backups of any
-> vault you try it in.
+> **Early days.** Trynalist is young. Expect rough edges, and keep backups of
+> any vault you try it in.
 
-## Installing with BRAT
+## Installing
+
+1. In Obsidian, open **Settings**, then **Community plugins**, and choose **Browse**.
+2. Search for **Trynalist** and choose **Install**.
+3. Enable **Trynalist** in Community plugins.
+
+### Beta builds with BRAT
+
+To try releases before they reach the community store:
 
 1. Install the **BRAT** plugin from Obsidian's community plugins.
 2. In BRAT's settings, choose **Add beta plugin**.
