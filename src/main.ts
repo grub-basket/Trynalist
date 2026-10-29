@@ -30,6 +30,7 @@ import {
 	PANE_TYPES, RECENT_VIEW_TYPE, TAGS_VIEW_TYPE,
 } from "./panels";
 import { ConfirmModal } from "./modals";
+import { DEFAULT_FILE_NAME_TEMPLATE, compilePattern, itemFileName, setFileNameFormat } from "./id-service";
 import { SafetyNet, SAFETY_DIR } from "./safety-net";
 import { ItemHistory } from "./item-history";
 import { RecentlyDeletedModal } from "./history-modal";
@@ -92,6 +93,15 @@ export default class TrynalistPlugin extends Plugin {
 
 	/** Body-level classes driven by settings, on every window — or only on
 	 *  `only`, a window that has just opened. */
+	/** Hand the file name settings to the store's namer (id-service). Called
+	 *  wherever `settings` is replaced: load, a synced merge, the settings tab. */
+	applyFileNameFormat(): void {
+		setFileNameFormat({
+			template: typeof this.settings.fileNameTemplate === "string" ? this.settings.fileNameTemplate : DEFAULT_FILE_NAME_TEMPLATE,
+			pattern: typeof this.settings.fileNamePattern === "string" ? this.settings.fileNamePattern : "",
+		});
+	}
+
 	applyBodyClasses(only?: Document): void {
 		for (const doc of only ? [only] : this.openDocuments()) {
 			doc.body.toggleClass("trynalist-no-strike", !this.settings.strikeCompleted);
@@ -2214,6 +2224,7 @@ export default class TrynalistPlugin extends Plugin {
 		const merged = mergeSettings(base, this.settings as unknown as Record<string, unknown>, remote);
 		this.settings = { ...DEFAULT_SETTINGS, ...(merged as Partial<TrynalistSettings>) };
 		this.settings.rootFolder = sanitizeRoot(this.settings.rootFolder);
+		this.applyFileNameFormat();
 		this.reminderState = { ...((diskReminders as ReminderState | undefined) ?? {}), ...this.reminderState };
 		this.settingsBase = JSON.parse(JSON.stringify(remote)) as Record<string, unknown>;
 		return { changed: true, keptLocal: stableStringify(merged) !== stableStringify(remote) };
@@ -2247,6 +2258,7 @@ export default class TrynalistPlugin extends Plugin {
 		// settings tab now enforces, so an old value with a trailing slash can't
 		// break every prefix check.
 		this.settings.rootFolder = sanitizeRoot(this.settings.rootFolder);
+		this.applyFileNameFormat();
 		// One-time migration into Obsidian's keychain from either earlier storage:
 		// an Electron-safeStorage blob (dynalistTokenEnc) or a plaintext field.
 		// After a successful move the settings copy is wiped so the token lives
@@ -2468,6 +2480,105 @@ class TrynalistSettingTab extends PluginSettingTab {
 		}
 	}
 
+	/** File name template + pattern (GitHub issue #1), with a live example.
+	 *  Saved when you leave a field or press Enter, like the root folder, so
+	 *  typing doesn't write data.json (and sync it) on every keystroke. */
+	private renderFileNameSettings(containerEl: HTMLElement): void {
+		const s = this.plugin.settings;
+		let templateField: TextComponent | null = null;
+		let patternField: TextComponent | null = null;
+		let exampleEl: HTMLElement | null = null;
+		const code = (f: DocumentFragment, text: string): void => { f.createEl("code", { text }); };
+
+		const updateExample = (): void => {
+			if (!exampleEl) return;
+			const template = templateField?.getValue() ?? s.fileNameTemplate;
+			const pattern = patternField?.getValue() ?? s.fileNamePattern;
+			const sample = { text: "Topic keyword", id: "a1b2c3d4e5", parentText: "Meeting notes", docTitle: "Work" };
+			exampleEl.empty();
+			exampleEl.appendText(`An item "${sample.text}" under "${sample.parentText}" in the document "${sample.docTitle}" becomes `);
+			exampleEl.createEl("code", { text: `${itemFileName(sample, { template, pattern })}.md` });
+			if (pattern && !compilePattern(pattern)) exampleEl.appendText(". The pattern isn't a valid regular expression, so $1… are empty.");
+		};
+
+		const saveField = async (key: "fileNameTemplate" | "fileNamePattern", value: string): Promise<void> => {
+			// The live object, not `s`: a synced merge replaces settings wholesale.
+			if (this.plugin.settings[key] === value) return;
+			this.plugin.settings[key] = value;
+			this.plugin.applyFileNameFormat();
+			await this.plugin.saveSettings();
+		};
+		const wire = (t: TextComponent, apply: () => Promise<void>): void => {
+			t.inputEl.addEventListener("input", updateExample);
+			t.inputEl.addEventListener("blur", () => void apply());
+			t.inputEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); t.inputEl.blur(); } });
+		};
+
+		const templateDesc = createFragment((f) => {
+			f.appendText("How new item files are named. Files that already exist keep their names. You can use ");
+			code(f, "{{slug}}"); f.appendText(" (first words, lowercase), ");
+			code(f, "{{text}}"); f.appendText(" (the item's text), ");
+			code(f, "{{id}}"); f.appendText(", ");
+			code(f, "{{date}}"); f.appendText(" or "); code(f, "{{date:YY-MM-DD}}"); f.appendText(", ");
+			code(f, "{{time}}"); f.appendText(" or "); code(f, "{{time:HH-mm}}"); f.appendText(", ");
+			code(f, "{{uuid}}"); f.appendText(", ");
+			code(f, "{{parent}}"); f.appendText(" (the parent item's text), ");
+			code(f, "{{doc}}"); f.appendText(" (the document name), and ");
+			code(f, "$1"); f.appendText(" to "); code(f, "$9"); f.appendText(" from the text pattern below. ");
+			f.appendText("Dates use the item's creation time. You can leave out ");
+			code(f, "{{id}}"); f.appendText(": if a name is already taken, a number is added, like ");
+			code(f, "Topic 2.md"); f.appendText(".");
+		});
+		new Setting(containerEl)
+			.setName("File name template")
+			.setDesc(templateDesc)
+			.addText((t) => {
+				templateField = t;
+				t.setPlaceholder(DEFAULT_FILE_NAME_TEMPLATE).setValue(s.fileNameTemplate);
+				wire(t, async () => {
+					const v = t.getValue().trim() || DEFAULT_FILE_NAME_TEMPLATE;
+					t.setValue(v);
+					updateExample();
+					await saveField("fileNameTemplate", v);
+				});
+			})
+			.addExtraButton((b) => b.setIcon("rotate-ccw").setTooltip("Reset to the default").onClick(async () => {
+				templateField?.setValue(DEFAULT_FILE_NAME_TEMPLATE);
+				updateExample();
+				await saveField("fileNameTemplate", DEFAULT_FILE_NAME_TEMPLATE);
+			}));
+
+		const patternDesc = createFragment((f) => {
+			f.appendText("Optional. A regular expression run on the item's text. Each part in brackets fills ");
+			code(f, "$1"); f.appendText(", "); code(f, "$2"); f.appendText(" and so on, and ");
+			code(f, "$&"); f.appendText(" is the whole match. For example, ");
+			code(f, "(\\w+) (\\w+)"); f.appendText(" with the template ");
+			code(f, "$1 - {{date:YY-MM-DD}} - $2"); f.appendText(" names an item \"topic keyword\" made on 12 October 2026 ");
+			code(f, "topic - 26-10-12 - keyword.md"); f.appendText(".");
+		});
+		new Setting(containerEl)
+			.setName("Text pattern")
+			.setDesc(patternDesc)
+			.addText((t) => {
+				patternField = t;
+				t.setPlaceholder("(\\w+) (\\w+)").setValue(s.fileNamePattern);
+				wire(t, async () => {
+					const v = t.getValue();
+					if (v && !compilePattern(v)) {
+						new Notice("Trynalist: that text pattern isn't a valid regular expression, so it wasn't saved.");
+						t.setValue(this.plugin.settings.fileNamePattern);
+						updateExample();
+						return;
+					}
+					await saveField("fileNamePattern", v);
+				});
+			});
+
+		const example = new Setting(containerEl).setName("Example");
+		exampleEl = example.descEl;
+		updateExample();
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -2501,6 +2612,8 @@ class TrynalistSettingTab extends PluginSettingTab {
 				t.inputEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); t.inputEl.blur(); } });
 				new FolderSuggest(this.app, t.inputEl);
 			});
+
+		this.renderFileNameSettings(containerEl);
 
 		new Setting(containerEl)
 			.setName("Dynalist import")

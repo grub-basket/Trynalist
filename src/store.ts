@@ -1,5 +1,6 @@
 import { App, Notice, TFile, TFolder, normalizePath, parseYaml, stringifyYaml } from "obsidian";
-import { newId, safeName, slugFor } from "./id-service";
+import { fileNameTemplateUses, itemFileName, newId, safeName } from "./id-service";
+import type { FileNameContext } from "./id-service";
 import { primaryDate } from "./dates";
 import { stableStringify } from "./settings-merge";
 import type { DocManifest, DocRef, NodeSnapshot, TreeNode, TrynaId, MirrorMode } from "./types";
@@ -7,6 +8,33 @@ import { DOC_EXTENSION, MAX_HEADING, isReservedFolderName, ATTACHMENTS_SUBFOLDER
 
 const ORDER_STEP = 100;
 const MIN_GAP = 1e-6;
+
+/** Item paths handed out but not yet created. With the id in every name a
+ *  free-on-disk check was enough; a file name template without `{{id}}` can
+ *  give two items the same name, and the import writes 16 files at once, so
+ *  two creates could both see the path free and the second would throw. */
+const claimedPaths = new Set<string>();
+
+/** First free `<folder>/<base>.md`, then `<base> 2.md`, `<base> 3.md`…, free
+ *  on disk and not claimed by a create still in flight. The caller releases
+ *  it with `releaseItemPath` once its create or rename has settled.
+ *
+ *  Compared without case: macOS, Windows and iOS disks treat `Topic.md` and
+ *  `topic.md` as one file, and Obsidian's create/rename then throw "already
+ *  exists". The default slug is lowercase, but `{{text}}` keeps case. */
+function claimItemPath(app: App, folder: string, base: string): string {
+	const dir = app.vault.getFolderByPath(folder);
+	const onDisk = new Set((dir?.children ?? []).map((c) => c.name.toLowerCase()));
+	const taken = (name: string): boolean =>
+		onDisk.has(name.toLowerCase()) || claimedPaths.has(`${folder}/${name}`.toLowerCase());
+	let name = `${base}.md`;
+	let k = 2;
+	while (taken(name)) name = `${base} ${k++}.md`;
+	const path = `${folder}/${name}`;
+	claimedPaths.add(path.toLowerCase());
+	return path;
+}
+function releaseItemPath(path: string): void { claimedPaths.delete(path.toLowerCase()); }
 
 /** Our colour is an index 0–6 (Dynalist's labels); Stashpad stores a hex
  *  string. Accept either so a shared folder keeps its colours instead of
@@ -395,18 +423,18 @@ export async function writeImportedTree(
 	// Ids are assigned up front and a child's file does not need its parent's
 	// to exist first (load() reads a folder in any order), so the files are
 	// written 16 at a time instead of one awaited create per item (L77).
-	const planned: Array<{ n: ImportedNode; id: string; parentId: string | null; depth: number; order: number }> = [];
-	const plan = (n: ImportedNode, parentId: string | null, depth: number, order: number): void => {
+	const planned: Array<{ n: ImportedNode; id: string; parentId: string | null; depth: number; order: number; parentText: string }> = [];
+	const plan = (n: ImportedNode, parentId: string | null, depth: number, order: number, parentText: string): void => {
 		const id = newId();
-		planned.push({ n, id, parentId, depth, order });
+		planned.push({ n, id, parentId, depth, order, parentText });
 		let childOrder = ORDER_STEP;
 		for (const c of n.children) {
-			plan(c, id, depth + 1, childOrder);
+			plan(c, id, depth + 1, childOrder, n.text);
 			childOrder += ORDER_STEP;
 		}
 	};
 
-	const writeOne = async (n: ImportedNode, id: string, parentId: string | null, depth: number, order: number): Promise<void> => {
+	const writeOne = async (n: ImportedNode, id: string, parentId: string | null, depth: number, order: number, parentText: string): Promise<void> => {
 		// Same field set and conditional inclusion as writeMeta, so a bulk-written
 		// file is indistinguishable from an incrementally-saved one.
 		const fm: Record<string, unknown> = {
@@ -429,20 +457,23 @@ export async function writeImportedTree(
 		if (n.dlExtra && Object.keys(n.dlExtra).length) fm.dlExtra = n.dlExtra;
 
 		const content = `---\n${stringifyYaml(fm)}---\n${joinBody(n.text, n.note)}`;
-		let path = `${folder}/${slugFor(n.text)}-${id}.md`;
-		let k = 2;
-		while (app.vault.getAbstractFileByPath(path)) path = `${folder}/${slugFor(n.text)}-${id} ${k++}.md`;
-		await app.vault.create(path, content);
+		const base = itemFileName({ text: n.text, id, parentText, docTitle: docRef.manifest.title, created: fm.created as string });
+		const path = claimItemPath(app, folder, base);
+		try {
+			await app.vault.create(path, content);
+		} finally {
+			releaseItemPath(path);
+		}
 		count++;
 	};
 
 	let order = ORDER_STEP;
 	for (const r of roots) {
-		plan(r, null, 0, order);
+		plan(r, null, 0, order, "");
 		order += ORDER_STEP;
 	}
 	for (let i = 0; i < planned.length; i += 16) {
-		await Promise.all(planned.slice(i, i + 16).map((p) => writeOne(p.n, p.id, p.parentId, p.depth, p.order)));
+		await Promise.all(planned.slice(i, i + 16).map((p) => writeOne(p.n, p.id, p.parentId, p.depth, p.order, p.parentText)));
 	}
 	return count;
 }
@@ -454,13 +485,17 @@ export async function writeImportedTree(
 export async function appendItemFile(app: App, docRef: DocRef, parentId: string | null, text: string, note = ""): Promise<void> {
 	let lastOrder = 0;
 	let parentDepth = -1;
+	let parentFile: TFile | null = null;
 	for (const c of docRef.folder.children) {
 		if (!(c instanceof TFile) || c.extension !== "md") continue;
 		const fm = app.metadataCache.getFileCache(c)?.frontmatter;
 		if (!fm?.id) continue;
 		const p = typeof fm.parent === "string" && fm.parent !== "__root__" ? fm.parent : null;
 		if (p === parentId && typeof fm.order === "number") lastOrder = Math.max(lastOrder, fm.order);
-		if (parentId && String(fm.id) === parentId) parentDepth = typeof fm.depth === "number" ? fm.depth : 0;
+		if (parentId && String(fm.id) === parentId) {
+			parentDepth = typeof fm.depth === "number" ? fm.depth : 0;
+			parentFile = c;
+		}
 	}
 	if (parentId && parentDepth < 0) parentId = null;   // parent not found: top level
 	const depth = parentId ? parentDepth + 1 : 0;
@@ -472,10 +507,22 @@ export async function appendItemFile(app: App, docRef: DocRef, parentId: string 
 	};
 	const due = primaryDate(text, note);
 	if (due) fm.due = due;
-	let path = `${docRef.folder.path}/${slugFor(text)}-${id}.md`;
-	let k = 2;
-	while (app.vault.getAbstractFileByPath(path)) path = `${docRef.folder.path}/${slugFor(text)}-${id} ${k++}.md`;
-	await app.vault.create(path, `---\n${stringifyYaml(fm)}---\n${joinBody(text, note)}`);
+	// The parent's text is only on disk here; read it only when the template
+	// asks for it, so Capture stays one write and no reads by default.
+	let parentText = "";
+	if (parentId && parentFile && fileNameTemplateUses("parent")) {
+		try {
+			const raw = await app.vault.cachedRead(parentFile);
+			parentText = splitBody(raw.replace(/^---\n[\s\S]*?\n---\n?/, "")).text;
+		} catch { /* no parent text: {{parent}} renders empty */ }
+	}
+	const base = itemFileName({ text, id, parentText, docTitle: docRef.manifest.title, created: now });
+	const path = claimItemPath(app, docRef.folder.path, base);
+	try {
+		await app.vault.create(path, `---\n${stringifyYaml(fm)}---\n${joinBody(text, note)}`);
+	} finally {
+		releaseItemPath(path);
+	}
 }
 
 export async function createDoc(app: App, rootFolder: string, title: string): Promise<DocRef> {
@@ -831,21 +878,73 @@ export class DocIndex {
 	}
 	private recreated = new Set<TrynaId>();
 
+	/** One materialize per item at a time: a second call while the first is
+	 *  creating the file waits for it. Without this, the path claim would send
+	 *  the second create to `<name> 2.md` — a duplicate file for one item. */
+	private materializing = new Map<TrynaId, Promise<void>>();
+
 	private async materialize(n: TreeNode): Promise<void> {
+		const inFlight = this.materializing.get(n.id);
+		if (inFlight) { await inFlight; return; }
+		const run = this.materializeNow(n);
+		this.materializing.set(n.id, run);
+		try {
+			await run;
+		} finally {
+			if (this.materializing.get(n.id) === run) this.materializing.delete(n.id);
+		}
+	}
+
+	private async materializeNow(n: TreeNode): Promise<void> {
 		this.dropIfGone(n);
 		if (n.file) return;
-		const base = `${this.docRef.folder.path}/${slugFor(n.text)}-${n.id}`;
+		const folder = this.docRef.folder.path;
+		const base = itemFileName(this.nameContext(n, n.text));
 		// The id keeps this unique in normal use, but an update can re-add an item
 		// whose file the metadata cache didn't report (so it looked new) while the
 		// file is still on disk — a bare create would then throw "File already
-		// exists" and fail the document. If the path is taken, adopt the existing
-		// file rather than colliding.
-		let path = `${base}.md`;
-		const existing = this.app.vault.getAbstractFileByPath(path);
-		if (existing instanceof TFile) { n.file = existing; return; }
-		let k = 2;
-		while (this.app.vault.getAbstractFileByPath(path)) path = `${base} ${k++}.md`;
-		n.file = await this.io(this.app.vault.create(path, joinBody(n.text, n.note)));
+		// exists" and fail the document. If a path is taken by THIS item's file,
+		// adopt it rather than colliding. A template without {{id}} can give two
+		// items one name, so a taken path no longer proves it is this item's:
+		// check each taken candidate (`<name>.md`, `<name> 2.md`, …) in turn.
+		for (let k = 1; ; k++) {
+			const existing = this.app.vault.getAbstractFileByPath(`${folder}/${base}${k === 1 ? "" : ` ${k}`}.md`);
+			if (!(existing instanceof TFile)) break;
+			if (await this.isFileOf(existing, n.id)) { n.file = existing; return; }
+		}
+		const path = claimItemPath(this.app, folder, base);
+		try {
+			n.file = await this.io(this.app.vault.create(path, joinBody(n.text, n.note)));
+		} finally {
+			releaseItemPath(path);
+		}
+	}
+
+	/** What a file name template can use for `n`, named from `text`. */
+	private nameContext(n: TreeNode, text: string): FileNameContext {
+		return {
+			text, id: n.id,
+			parentText: n.parent ? this.nodes.get(n.parent)?.text ?? "" : "",
+			docTitle: this.docRef.manifest.title,
+			created: n.created,
+		};
+	}
+
+	/** Whether `file` is item `id`'s: its name carries the id (the default
+	 *  template), or its frontmatter says so. The cache can lag a file just
+	 *  written (the case materialize guards), so fall back to reading it. */
+	private async isFileOf(file: TFile, id: TrynaId): Promise<boolean> {
+		if (file.basename.includes(id)) return true;
+		const cached: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.id;
+		if (cached !== undefined && cached !== null && cached !== "") return idToString(cached as string | number) === id;
+		try {
+			const raw = await this.app.vault.cachedRead(file);
+			const front = /^---\n([\s\S]*?)\n---/.exec(raw)?.[1] ?? "";
+			const m = /^id:\s*["']?([^\s"']+)/m.exec(front);
+			return !!m && m[1] === id;
+		} catch {
+			return false;
+		}
 	}
 
 	/** Public wrapper used when copying nodes between documents. */
@@ -1038,16 +1137,18 @@ export class DocIndex {
 			await this.writeMeta(n); // creates the file, named from the text
 			return;
 		}
-		// Rename-on-first-save: files created blank (legacy) carry the
-		// placeholder "item" slug; fix it once, then the name is frozen.
-		// The id suffix makes collisions impossible.
+		// Rename-on-first-save: files created blank carry the placeholder
+		// `item-<id>` name; fix it once, then the name is frozen. A template
+		// without {{id}} can collide, so the target goes through claimItemPath.
 		if (n.file.name === `item-${n.id}.md`) {
-			const slug = slugFor(text);
-			if (slug !== "item") {
-				await this.io(this.app.fileManager.renameFile(
-					n.file,
-					`${this.docRef.folder.path}/${slug}-${n.id}.md`,
-				));
+			const base = itemFileName(this.nameContext(n, text));
+			if (base !== `item-${n.id}`) {
+				const target = claimItemPath(this.app, this.docRef.folder.path, base);
+				try {
+					await this.io(this.app.fileManager.renameFile(n.file, target));
+				} finally {
+					releaseItemPath(target);
+				}
 			}
 		}
 		// One write for body and frontmatter together: a save used to rewrite

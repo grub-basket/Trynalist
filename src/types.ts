@@ -290,6 +290,11 @@ export type SearchSort =
 
 export interface TrynalistSettings {
 	rootFolder: string;
+	/** How new item files are named (id-service `itemFileName`). Existing
+	 *  files are never renamed. Default `{{slug}}-{{id}}`. */
+	fileNameTemplate: string;
+	/** Optional regex on the item's text; its groups fill `$1`…`$9`. */
+	fileNamePattern: string;
 	/** Dynalist API secret, ENCRYPTED at rest via the OS keychain (Electron
 	 *  safeStorage). Base64 ciphertext, decrypted only in memory when a request
 	 *  is made. Empty when unset or when the token is being held in the
@@ -444,6 +449,8 @@ export const DEFAULT_SETTINGS: TrynalistSettings = {
 	docNoteDisplay: {},
 	docTextDirection: {},
 	rootFolder: "Trynalist",
+	fileNameTemplate: "{{slug}}-{{id}}",
+	fileNamePattern: "",
 	dynalistTokenEnc: "",
 	dynalistToken: "",
 	importShared: true,

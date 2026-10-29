@@ -1,3 +1,4 @@
+import { moment } from "obsidian";
 import type { TrynaId } from "./types";
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -34,6 +35,123 @@ export function slugFor(text: string): string {
 		// the item would be on disk and invisible on reload.
 		.replace(/^\.+/, "");
 	return s.slice(0, 48) || "item";
+}
+
+/** The item file name template (GitHub issue #1). The default reproduces the
+ *  names every earlier version wrote, so nothing changes until it is edited. */
+export const DEFAULT_FILE_NAME_TEMPLATE = "{{slug}}-{{id}}";
+
+export interface FileNameFormat {
+	template: string;
+	/** Optional regex run on the item's text; its groups fill `$1`…`$9`. */
+	pattern: string;
+}
+
+/** Set by the plugin from its settings (load, save, sync). Module state
+ *  rather than a parameter because a DocIndex is built in a dozen places
+ *  that know nothing about settings; there is one plugin instance. */
+let fileNameFormat: FileNameFormat = { template: DEFAULT_FILE_NAME_TEMPLATE, pattern: "" };
+export function setFileNameFormat(f: FileNameFormat): void { fileNameFormat = f; }
+export function fileNameTemplateUses(variable: string): boolean {
+	return new RegExp(`\\{\\{\\s*${variable}\\b`, "i").test(fileNameFormat.template);
+}
+
+/** What a template can draw on. `created` is the item's creation time (ISO);
+ *  missing means now. */
+export interface FileNameContext {
+	text: string;
+	id: string;
+	parentText?: string;
+	docTitle?: string;
+	created?: string;
+}
+
+/** Item text as a file-name part: case and spaces kept, link targets, dates
+ *  and the characters the vault, the filesystem or a Markdown link reject
+ *  removed (same set slugFor strips). */
+function cleanForName(text: string): string {
+	const s = (text ?? "")
+		.split("\n")[0]
+		.replace(/!\([^)]*\)/g, " ")
+		.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+		.replace(/[#[\]|^:\\/*?"<>()!%`]/g, " ")
+		.replace(CONTROL_CHARS_RE, "")
+		.replace(/\s+/g, " ")
+		.trim();
+	return Array.from(s).slice(0, 80).join("").trim();
+}
+
+/** Invalid patterns are ignored (the settings tab says so), never thrown. */
+export function compilePattern(pattern: string): RegExp | null {
+	if (!pattern) return null;
+	try { return new RegExp(pattern, "u"); } catch { return null; }
+}
+
+/** The base name (no folder, no `.md`, no collision suffix) for a new item
+ *  file. Files are named once, at creation, and never renamed after, so a
+ *  template change only affects items created from then on.
+ *
+ *  - A blank item is always `item-<id>`: that placeholder is what the
+ *    rename-on-first-save in store.ts looks for, and it gives the item its
+ *    real name once it has text.
+ *  - One pass over the template, so text that happens to contain `{{id}}` or
+ *    `$1` is never expanded a second time.
+ *  - A template that renders to nothing usable falls back to the default. */
+export function itemFileName(ctx: FileNameContext, fmt: FileNameFormat = fileNameFormat): string {
+	const placeholder = `item-${ctx.id}`;
+	if (!(ctx.text ?? "").trim()) return placeholder;
+	// The default is built exactly as every earlier version built it — no
+	// tidying — so names (and materialize's adopt-by-name check) match files
+	// those versions wrote, e.g. `_draft-plan-<id>` keeps its underscore.
+	const legacy = `${slugFor(ctx.text)}-${ctx.id}`;
+	const template = fmt.template.trim() || DEFAULT_FILE_NAME_TEMPLATE;
+	if (template === DEFAULT_FILE_NAME_TEMPLATE) return legacy;
+	const re = compilePattern(fmt.pattern);
+	const source = (ctx.text ?? "").split("\n")[0].replace(/!\([^)]*\)/g, " ");
+	const groups = re ? re.exec(source) : null;
+	const when = ctx.created && moment(ctx.created).isValid() ? moment(ctx.created) : moment();
+	const render = (tpl: string): string => tpl.replace(
+		/\{\{\s*(\w+)\s*(?::([^}]*))?\}\}|\$(\d|&|\$)/g,
+		(whole: string, name: string | undefined, arg: string | undefined, ref: string | undefined) => {
+			if (ref !== undefined) {
+				if (ref === "$") return "$";
+				const g = groups ? groups[ref === "&" ? 0 : Number(ref)] : undefined;
+				return g ? cleanForName(g) : "";
+			}
+			switch ((name ?? "").toLowerCase()) {
+				case "slug": return slugFor(ctx.text);
+				case "text": return cleanForName(ctx.text);
+				case "id": return ctx.id;
+				case "uuid": return crypto.randomUUID();
+				case "date": return when.format(arg?.trim() || "YYYY-MM-DD");
+				case "time": return when.format(arg?.trim() || "HHmmss");
+				case "parent": return cleanForName(ctx.parentText ?? "");
+				case "doc": return cleanForName(ctx.docTitle ?? "");
+				default: return whole;   // unknown: left as typed, so the preview shows it
+			}
+		},
+	);
+	const tidy = (s: string): string => capBytes(safeName(
+		s.replace(/\s+/g, " ").replace(/^[\s\-_.]+|[\s\-_]+$/g, ""),
+		"",
+	));
+	return tidy(render(template)) || legacy;
+}
+
+/** File names are limited to 255 BYTES on most filesystems; safeName's 120
+ *  characters can be 360 bytes of CJK text. 200 leaves room for ` 99.md`. */
+function capBytes(name: string, max = 200): string {
+	const enc = new TextEncoder();
+	if (enc.encode(name).length <= max) return name;
+	let out = "";
+	let bytes = 0;
+	for (const ch of name) {
+		const b = enc.encode(ch).length;
+		if (bytes + b > max) break;
+		out += ch;
+		bytes += b;
+	}
+	return out.replace(/[\s\-_.]+$/, "");
 }
 
 /** A filesystem- and Obsidian-safe folder/file NAME from free text. One place
