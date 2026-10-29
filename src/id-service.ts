@@ -41,10 +41,20 @@ export function slugFor(text: string): string {
  *  names every earlier version wrote, so nothing changes until it is edited. */
 export const DEFAULT_FILE_NAME_TEMPLATE = "{{slug}}-{{id}}";
 
+/** What a bare `{{date}}` / `{{time}}` gives when no other format applies:
+ *  the setting to follow the Templates plugin is off, or that plugin is. */
+export const DEFAULT_DATE_FORMAT = "YYYY-MM-DD";
+export const DEFAULT_TIME_FORMAT = "HHmmss";
+
 export interface FileNameFormat {
 	template: string;
 	/** Optional regex run on the item's text; its groups fill `$1`…`$9`. */
 	pattern: string;
+	/** Formats for a bare `{{date}}` / `{{time}}`, taken from the core
+	 *  Templates plugin when the setting says so. A format written in the
+	 *  template (`{{date:YY-MM-DD}}`) always wins. */
+	dateFormat?: string;
+	timeFormat?: string;
 }
 
 /** Set by the plugin from its settings (load, save, sync). Module state
@@ -52,6 +62,38 @@ export interface FileNameFormat {
  *  that know nothing about settings; there is one plugin instance. */
 let fileNameFormat: FileNameFormat = { template: DEFAULT_FILE_NAME_TEMPLATE, pattern: "" };
 export function setFileNameFormat(f: FileNameFormat): void { fileNameFormat = f; }
+export function getFileNameFormat(): FileNameFormat { return fileNameFormat; }
+
+/** The Templates formats live in another plugin's settings file, which can
+ *  change while Obsidian runs. Rather than watch it, the store calls this
+ *  before naming a file: it re-reads at most every 15 s, and only when the
+ *  template has a bare `{{date}}` or `{{time}}` that would use them. */
+let formatRefresher: (() => Promise<void>) | null = null;
+let refreshedAt = 0;
+/** The read in progress. Every caller that arrives meanwhile waits for it,
+ *  so items named during a read don't get the formats from before it. */
+let inFlight: Promise<void> | null = null;
+export function setFileNameFormatRefresher(fn: (() => Promise<void>) | null): void {
+	formatRefresher = fn;
+	refreshedAt = 0;
+}
+function runRefresh(): Promise<void> {
+	refreshedAt = Date.now();
+	const run: Promise<void> = (formatRefresher ? formatRefresher() : Promise.resolve())
+		.catch(() => { /* keep the formats already loaded */ })
+		.finally(() => { if (inFlight === run) inFlight = null; });
+	inFlight = run;
+	return run;
+}
+/** Read now, ignoring the 15 s limit: on load, a settings change, the settings tab. */
+export function reloadFileNameFormat(): Promise<void> { return runRefresh(); }
+export async function refreshFileNameFormat(): Promise<void> {
+	if (inFlight) return inFlight;
+	if (!formatRefresher || Date.now() - refreshedAt < 15000) return;
+	// Bare or empty-format `{{date}}` / `{{date:}}` (and time) are the ones that use them.
+	if (!/\{\{\s*(date|time)\s*(:\s*)?\}\}/i.test(fileNameFormat.template)) return;
+	return runRefresh();
+}
 export function fileNameTemplateUses(variable: string): boolean {
 	return new RegExp(`\\{\\{\\s*${variable}\\b`, "i").test(fileNameFormat.template);
 }
@@ -123,8 +165,8 @@ export function itemFileName(ctx: FileNameContext, fmt: FileNameFormat = fileNam
 				case "text": return cleanForName(ctx.text);
 				case "id": return ctx.id;
 				case "uuid": return crypto.randomUUID();
-				case "date": return when.format(arg?.trim() || "YYYY-MM-DD");
-				case "time": return when.format(arg?.trim() || "HHmmss");
+				case "date": return when.format(arg?.trim() || fmt.dateFormat || DEFAULT_DATE_FORMAT);
+				case "time": return when.format(arg?.trim() || fmt.timeFormat || DEFAULT_TIME_FORMAT);
 				case "parent": return cleanForName(ctx.parentText ?? "");
 				case "doc": return cleanForName(ctx.docTitle ?? "");
 				default: return whole;   // unknown: left as typed, so the preview shows it

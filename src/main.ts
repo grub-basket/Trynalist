@@ -30,7 +30,7 @@ import {
 	PANE_TYPES, RECENT_VIEW_TYPE, TAGS_VIEW_TYPE,
 } from "./panels";
 import { ConfirmModal } from "./modals";
-import { DEFAULT_FILE_NAME_TEMPLATE, compilePattern, itemFileName, setFileNameFormat } from "./id-service";
+import { DEFAULT_FILE_NAME_TEMPLATE, compilePattern, getFileNameFormat, itemFileName, reloadFileNameFormat, setFileNameFormat, setFileNameFormatRefresher } from "./id-service";
 import { SafetyNet, SAFETY_DIR } from "./safety-net";
 import { ItemHistory } from "./item-history";
 import { RecentlyDeletedModal } from "./history-modal";
@@ -91,17 +91,63 @@ export default class TrynalistPlugin extends Plugin {
 		return docs;
 	}
 
-	/** Body-level classes driven by settings, on every window — or only on
-	 *  `only`, a window that has just opened. */
 	/** Hand the file name settings to the store's namer (id-service). Called
-	 *  wherever `settings` is replaced: load, a synced merge, the settings tab. */
+	 *  wherever `settings` is replaced: load, a synced merge, the settings tab.
+	 *  The Templates formats are kept from the last read and re-read in the
+	 *  background (and by the store before naming, at most every 15 s). */
 	applyFileNameFormat(): void {
 		setFileNameFormat({
+			...getFileNameFormat(),
 			template: typeof this.settings.fileNameTemplate === "string" ? this.settings.fileNameTemplate : DEFAULT_FILE_NAME_TEMPLATE,
 			pattern: typeof this.settings.fileNamePattern === "string" ? this.settings.fileNamePattern : "",
 		});
+		setFileNameFormatRefresher(() => this.loadTemplateFormats());
+		void reloadFileNameFormat();
 	}
 
+	/** Bumped by every loadTemplateFormats call; a read that finishes after a
+	 *  newer one started is dropped, so the toggle's latest state always wins. */
+	private templateFormatsGen = 0;
+
+	/** Point a bare `{{date}}` / `{{time}}` at the core Templates plugin's Date
+	 *  and Time format, the way Obsidian's own templates use them — or clear
+	 *  them (id-service then uses YYYY-MM-DD / HHmmss) when the setting is off
+	 *  or Templates isn't enabled. Read from the two config files rather than
+	 *  `app.internalPlugins`, which isn't public API. */
+	async loadTemplateFormats(): Promise<void> {
+		const gen = ++this.templateFormatsGen;
+		let dateFormat: string | undefined;
+		let timeFormat: string | undefined;
+		if (this.settings.fileNameUseTemplateFormats !== false) {
+			const t = await this.readTemplatesFormats();
+			if (t) ({ dateFormat, timeFormat } = t);
+		}
+		if (gen !== this.templateFormatsGen) return;
+		setFileNameFormat({ ...getFileNameFormat(), dateFormat, timeFormat });
+	}
+
+	/** Templates' formats, or null when that core plugin is off. Missing or
+	 *  empty fields mean its own defaults: YYYY-MM-DD and HH:mm. */
+	private async readTemplatesFormats(): Promise<{ dateFormat: string; timeFormat: string } | null> {
+		const adapter = this.app.vault.adapter;
+		const dir = this.app.vault.configDir;
+		const readJson = async (name: string): Promise<unknown> => {
+			try { return JSON.parse(await adapter.read(`${dir}/${name}`)) as unknown; } catch { return null; }
+		};
+		// core-plugins.json is { id: enabled } today; older versions wrote an array of enabled ids.
+		const core = await readJson("core-plugins.json");
+		const enabled = Array.isArray(core)
+			? core.includes("templates")
+			: !!core && typeof core === "object" && (core as Record<string, unknown>).templates === true;
+		if (!enabled) return null;
+		const raw = await readJson("templates.json");
+		const opts = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+		const pick = (v: unknown, fallback: string): string => typeof v === "string" && v.trim() ? v.trim() : fallback;
+		return { dateFormat: pick(opts.dateFormat, "YYYY-MM-DD"), timeFormat: pick(opts.timeFormat, "HH:mm") };
+	}
+
+	/** Body-level classes driven by settings, on every window — or only on
+	 *  `only`, a window that has just opened. */
 	applyBodyClasses(only?: Document): void {
 		for (const doc of only ? [only] : this.openDocuments()) {
 			doc.body.toggleClass("trynalist-no-strike", !this.settings.strikeCompleted);
@@ -2399,6 +2445,7 @@ export default class TrynalistPlugin extends Plugin {
 	}
 
 	onunload(): void {
+		setFileNameFormatRefresher(null);
 		void this.flushOpenDocs();
 		// A coalesced write still pending must land, or the last focus/search
 		// state is lost on disable.
@@ -2497,7 +2544,7 @@ class TrynalistSettingTab extends PluginSettingTab {
 			const sample = { text: "Topic keyword", id: "a1b2c3d4e5", parentText: "Meeting notes", docTitle: "Work" };
 			exampleEl.empty();
 			exampleEl.appendText(`An item "${sample.text}" under "${sample.parentText}" in the document "${sample.docTitle}" becomes `);
-			exampleEl.createEl("code", { text: `${itemFileName(sample, { template, pattern })}.md` });
+			exampleEl.createEl("code", { text: `${itemFileName(sample, { ...getFileNameFormat(), template, pattern })}.md` });
 			if (pattern && !compilePattern(pattern)) exampleEl.appendText(". The pattern isn't a valid regular expression, so $1… are empty.");
 		};
 
@@ -2574,9 +2621,33 @@ class TrynalistSettingTab extends PluginSettingTab {
 				});
 			});
 
+		const formatsDesc = createFragment((f) => {
+			f.appendText("When on, ");
+			code(f, "{{date}}"); f.appendText(" and "); code(f, "{{time}}");
+			f.appendText(" use the Date format and Time format from Obsidian's Templates plugin, if it's turned on. When off, or when Templates is off, they use ");
+			code(f, "YYYY-MM-DD"); f.appendText(" and "); code(f, "HHmmss");
+			f.appendText(". A format you write in the template, like ");
+			code(f, "{{date:YY-MM-DD}}"); f.appendText(", is always used as written. Characters a file name can't contain, like ");
+			code(f, ":"); f.appendText(" and "); code(f, "/"); f.appendText(", become ");
+			code(f, "-"); f.appendText(".");
+		});
+		new Setting(containerEl)
+			.setName("Use the template plugin's date and time formats")
+			.setDesc(formatsDesc)
+			.addToggle((t) => t
+				.setValue(this.plugin.settings.fileNameUseTemplateFormats !== false)
+				.onChange(async (on) => {
+					this.plugin.settings.fileNameUseTemplateFormats = on;
+					await reloadFileNameFormat();
+					updateExample();
+					await this.plugin.saveSettings();
+				}));
+
 		const example = new Setting(containerEl).setName("Example");
 		exampleEl = example.descEl;
 		updateExample();
+		// Templates' formats may have changed since the last read (same window).
+		void reloadFileNameFormat().then(updateExample);
 	}
 
 	display(): void {

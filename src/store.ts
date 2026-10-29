@@ -1,5 +1,5 @@
 import { App, Notice, TFile, TFolder, normalizePath, parseYaml, stringifyYaml } from "obsidian";
-import { fileNameTemplateUses, itemFileName, newId, safeName } from "./id-service";
+import { fileNameTemplateUses, itemFileName, newId, refreshFileNameFormat, safeName } from "./id-service";
 import type { FileNameContext } from "./id-service";
 import { primaryDate } from "./dates";
 import { stableStringify } from "./settings-merge";
@@ -472,6 +472,7 @@ export async function writeImportedTree(
 		plan(r, null, 0, order, "");
 		order += ORDER_STEP;
 	}
+	await refreshFileNameFormat();
 	for (let i = 0; i < planned.length; i += 16) {
 		await Promise.all(planned.slice(i, i + 16).map((p) => writeOne(p.n, p.id, p.parentId, p.depth, p.order, p.parentText)));
 	}
@@ -516,6 +517,7 @@ export async function appendItemFile(app: App, docRef: DocRef, parentId: string 
 			parentText = splitBody(raw.replace(/^---\n[\s\S]*?\n---\n?/, "")).text;
 		} catch { /* no parent text: {{parent}} renders empty */ }
 	}
+	await refreshFileNameFormat();
 	const base = itemFileName({ text, id, parentText, docTitle: docRef.manifest.title, created: now });
 	const path = claimItemPath(app, docRef.folder.path, base);
 	try {
@@ -898,6 +900,9 @@ export class DocIndex {
 	private async materializeNow(n: TreeNode): Promise<void> {
 		this.dropIfGone(n);
 		if (n.file) return;
+		// Only here, where a file is actually about to be named: every writeMeta
+		// passes through materialize, and most of them name nothing.
+		await refreshFileNameFormat();
 		const folder = this.docRef.folder.path;
 		const base = itemFileName(this.nameContext(n, n.text));
 		// The id keeps this unique in normal use, but an update can re-add an item
@@ -1131,6 +1136,10 @@ export class DocIndex {
 	}
 
 	private async writeBodyNow(n: TreeNode, text: string, note: string): Promise<void> {
+		// The rename below may need fresh Templates formats. Read them FIRST,
+		// before anything checks n.file, so no await sits between that check
+		// and the writes that use it.
+		if (n.file?.name === `item-${n.id}.md`) await refreshFileNameFormat();
 		this.dropIfGone(n);
 		if (!n.file) {
 			if (!text && !note) return; // still blank — stays in RAM

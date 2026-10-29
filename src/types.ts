@@ -295,6 +295,9 @@ export interface TrynalistSettings {
 	fileNameTemplate: string;
 	/** Optional regex on the item's text; its groups fill `$1`…`$9`. */
 	fileNamePattern: string;
+	/** A bare `{{date}}` / `{{time}}` in the file name template follows the
+	 *  core Templates plugin's Date/Time format (when that plugin is on). */
+	fileNameUseTemplateFormats: boolean;
 	/** Dynalist API secret, ENCRYPTED at rest via the OS keychain (Electron
 	 *  safeStorage). Base64 ciphertext, decrypted only in memory when a request
 	 *  is made. Empty when unset or when the token is being held in the
@@ -451,6 +454,7 @@ export const DEFAULT_SETTINGS: TrynalistSettings = {
 	rootFolder: "Trynalist",
 	fileNameTemplate: "{{slug}}-{{id}}",
 	fileNamePattern: "",
+	fileNameUseTemplateFormats: true,
 	dynalistTokenEnc: "",
 	dynalistToken: "",
 	importShared: true,
