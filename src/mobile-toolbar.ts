@@ -1,4 +1,5 @@
-import { App, Modal, Notice, Platform, setIcon, setTooltip } from "obsidian";
+import { App, Notice, Platform, setIcon, setTooltip } from "obsidian";
+import { TrynalistModal } from "./trynalist-modal";
 import type TrynalistPlugin from "./main";
 import type { TrynalistDocView } from "./outline-view";
 
@@ -8,6 +9,8 @@ export interface ToolbarAction {
 	label: string;
 	icon: string;
 	run: (view: TrynalistDocView) => void | Promise<void>;
+	/** Meaningless off the toolbar, so the command bar leaves it out. */
+	toolbarOnly?: boolean;
 }
 
 /** Every action the toolbar can carry, in Dynalist's own order — the seventeen
@@ -18,6 +21,7 @@ export interface ToolbarAction {
 export const TOOLBAR_ACTIONS: ToolbarAction[] = [
 	{ id: "outdent", label: "Unindent", icon: "indent-decrease", run: (v) => v.cmdIndent(true) },
 	{ id: "indent", label: "Indent", icon: "indent-increase", run: (v) => v.cmdIndent(false) },
+	{ id: "dismiss-keyboard", label: "Dismiss keyboard", icon: "keyboard-off", run: (v) => v.dismissKeyboard(), toolbarOnly: true },
 	// The magnifier the document itself uses, not the plain search glass.
 	{ id: "zoom-in", label: "Zoom in", icon: "zoom-in", run: (v) => v.cmdZoomIn() },
 	{ id: "edit-note", label: "Edit note", icon: "text", run: (v) => v.focusNoteOfFocused() },
@@ -30,7 +34,8 @@ export const TOOLBAR_ACTIONS: ToolbarAction[] = [
 	{ id: "colour", label: "Set colour label", icon: "palette", run: (v) => v.cmdCycleColor() },
 	{ id: "newline", label: "Insert new line", icon: "corner-down-left", run: (v) => v.cmdLineBreak() },
 	{ id: "delete", label: "Delete", icon: "trash-2", run: (v) => v.cmdDeleteLine() },
-	{ id: "open-trash", label: "Open trash", icon: "trash", run: (v) => v.openTrashPanel() },
+	// Not a bin: "Delete" sits right beside it and the two looked identical.
+	{ id: "open-trash", label: "Open trash", icon: "archive-restore", run: (v) => v.openTrashPanel() },
 	{ id: "heading", label: "Set heading level", icon: "heading", run: (v) => v.cmdCycleHeading() },
 	{ id: "copy-link", label: "Copy item link", icon: "link", run: (v) => v.copyItemLink() },
 	{ id: "date", label: "Add date", icon: "calendar", run: (v) => v.openDatePicker() },
@@ -57,7 +62,7 @@ export const TOOLBAR_ACTIONS: ToolbarAction[] = [
 /** One list, three surfaces. The mobile toolbar, the command bar and the
  *  toolbar customiser all read this, so an action cannot exist in one and be
  *  quietly missing from another. */
-export const ITEM_ACTIONS = TOOLBAR_ACTIONS;
+export const ITEM_ACTIONS = TOOLBAR_ACTIONS.filter((a) => !a.toolbarOnly);
 
 /** Shown by default: everything down to and including Duplicate. */
 export const DEFAULT_TOOLBAR: string[] = TOOLBAR_ACTIONS
@@ -76,6 +81,9 @@ export function actionById(id: string): ToolbarAction | undefined {
 export class MobileToolbar {
 	private el: HTMLElement | null = null;
 	private onViewportChange: (() => void) | null = null;
+	private onViewportResize: (() => void) | null = null;
+	private caretFrame = 0;
+	private caretRetry = 0;
 
 	constructor(private view: TrynalistDocView, private plugin: TrynalistPlugin) {}
 
@@ -84,6 +92,10 @@ export class MobileToolbar {
 	mount(container: HTMLElement): void {
 		if (this.el || !MobileToolbar.shouldShow()) return;
 		this.el = container.createDiv({ cls: "trynalist-mobile-toolbar" });
+		// Obsidian's own opt-out: its drawer gesture walks up from the touch and
+		// gives up on this attribute, so scrolling the strip sideways stops
+		// dragging the side panels open.
+		this.el.dataset.ignoreSwipe = "true";
 		this.renderButtons();
 		this.trackKeyboard();
 	}
@@ -150,19 +162,72 @@ export class MobileToolbar {
 			const hidden = window.innerHeight - vv.height - vv.offsetTop;
 			this.el.style.bottom = `${Math.max(0, hidden)}px`;
 		};
+		const onResize = (): void => {
+			apply();
+			this.requestCaretClear();
+			// The scroller shrinks a beat after the viewport does, and until it
+			// has there may be nothing left to scroll.
+			window.clearTimeout(this.caretRetry);
+			this.caretRetry = window.setTimeout(this.requestCaretClear, 350);
+		};
 		this.onViewportChange = apply;
-		vv.addEventListener("resize", apply);
+		this.onViewportResize = onResize;
+		vv.addEventListener("resize", onResize);
 		vv.addEventListener("scroll", apply);
+		this.el.doc.addEventListener("selectionchange", this.requestCaretClear);
 		apply();
+	}
+
+	private requestCaretClear = (): void => {
+		if (this.caretFrame) return;
+		this.caretFrame = window.requestAnimationFrame(() => {
+			this.caretFrame = 0;
+			this.scrollCaretClear();
+		});
+	};
+
+	/** Keep the line being typed on visible between the sticky header and this
+	 *  bar, which otherwise covers the bottom of the scroller. A collapsed caret
+	 *  only: while a selection is being dragged the scroll is the user's. */
+	private scrollCaretClear(): void {
+		const bar = this.el;
+		if (!bar) return;
+		const scroller = this.view.contentEl;
+		const active = bar.doc.activeElement;
+		if (!active?.instanceOf(HTMLElement) || !active.isContentEditable || !scroller.contains(active)) return;
+		const selection = bar.doc.getSelection();
+		if (!selection?.rangeCount || !selection.isCollapsed) return;
+		// A caret has no rect when the line is empty or it sits at an element
+		// boundary, so a short field's own box stands in. In a tall note that box
+		// is mostly other lines, and aligning it would throw the caret off the
+		// other end, so there it waits for a position it can measure.
+		const rects = selection.getRangeAt(0).getClientRects();
+		const field = active.getBoundingClientRect();
+		if (!rects.length && field.height > 120) return;
+		const caret = rects.length ? rects[rects.length - 1] : field;
+		const margin = 12;
+		const below = caret.bottom - (bar.getBoundingClientRect().top - margin);
+		if (below > 0) {
+			scroller.scrollTop += below;
+			return;
+		}
+		const header = scroller.querySelector(".trynalist-crumbs");
+		const topLimit = (header?.getBoundingClientRect().bottom ?? scroller.getBoundingClientRect().top) + margin;
+		if (caret.top < topLimit) scroller.scrollTop -= topLimit - caret.top;
 	}
 
 	unmount(): void {
 		const vv = window.visualViewport;
-		if (vv && this.onViewportChange) {
-			vv.removeEventListener("resize", this.onViewportChange);
+		if (vv && this.onViewportChange && this.onViewportResize) {
+			vv.removeEventListener("resize", this.onViewportResize);
 			vv.removeEventListener("scroll", this.onViewportChange);
 		}
 		this.onViewportChange = null;
+		this.onViewportResize = null;
+		this.el?.doc.removeEventListener("selectionchange", this.requestCaretClear);
+		window.clearTimeout(this.caretRetry);
+		window.cancelAnimationFrame(this.caretFrame);
+		this.caretFrame = 0;
 		this.el?.remove();
 		this.el = null;
 	}
@@ -175,7 +240,7 @@ export class MobileToolbar {
 
 /** Dynalist's "Customize toolbar" screen: added actions in order, each with
  *  remove and move controls, then the ones left over. */
-class CustomiseToolbarModal extends Modal {
+class CustomiseToolbarModal extends TrynalistModal {
 	private chosen: string[];
 
 	constructor(app: App, private plugin: TrynalistPlugin, private onSave: () => void) {
@@ -332,7 +397,7 @@ export function menuEntryLabel(id: string): string {
 /** Reorder and hide item-menu entries. Same shape as the toolbar customiser,
  *  because it is the same job — but here everything starts shown, so it is a
  *  visibility toggle rather than an added/available split. */
-export class CustomiseMenuModal extends Modal {
+export class CustomiseMenuModal extends TrynalistModal {
 	private order: string[];
 	private hidden: Set<string>;
 

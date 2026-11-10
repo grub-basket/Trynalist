@@ -1,4 +1,5 @@
-import { App, ButtonComponent, Modal, Notice, Setting, TFile, TFolder, normalizePath, setIcon } from "obsidian";
+import { App, ButtonComponent, Notice, Setting, TFile, TFolder, normalizePath, setIcon } from "obsidian";
+import { TrynalistModal } from "./trynalist-modal";
 import { TRASH_FOLDER } from "./types";
 import { idToString, listDocs, parseFrontmatterBlock } from "./store";
 import { ConfirmModal } from "./modals";
@@ -141,7 +142,7 @@ export function openTrash(app: App, rootFolder: string, onChange: (restoredInto?
 /** More deletions than this and "Restore all" asks first. */
 const RESTORE_ALL_CONFIRM_ABOVE = 10;
 
-class TrashModal extends Modal {
+class TrashModal extends TrynalistModal {
 	/** Folder paths of the checked rows. Paths, not group objects: the list is
 	 *  re-read from disk after a bulk restore, which yields new objects. */
 	private selected = new Set<string>();

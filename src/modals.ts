@@ -1,10 +1,11 @@
-import { App, Modal, Notice, Setting, TFile, moment } from "obsidian";
+import { App, Notice, Setting, TFile, moment } from "obsidian";
+import { TrynalistModal } from "./trynalist-modal";
 import { describeRecurrence, parseRecurrence, timeFormatOf } from "./dates";
 import type { Recurrence } from "./dates";
 import type { TrynalistSettings } from "./types";
 
 /** Single-field prompt. Enter submits, Escape cancels. */
-export class PromptModal extends Modal {
+export class PromptModal extends TrynalistModal {
 	private value: string;
 
 	constructor(
@@ -56,7 +57,7 @@ export class PromptModal extends Modal {
 
 /** Date + optional time picker. Mirrors Dynalist's `!(date)` popup; honours
  *  the 12/24-hour, AM/PM and first-day-of-week preferences. */
-export class DatePickerModal extends Modal {
+export class DatePickerModal extends TrynalistModal {
 	private date: string;
 	private time: string;
 	private useTime: boolean;
@@ -187,7 +188,7 @@ export class DatePickerModal extends Modal {
 }
 
 /** Yes/no confirmation for destructive-ish actions. */
-export class ConfirmModal extends Modal {
+export class ConfirmModal extends TrynalistModal {
 	constructor(
 		app: App,
 		private opts: {
@@ -235,7 +236,7 @@ export class ConfirmModal extends Modal {
 
 /** Results of the integrity check, grouped by kind so one noisy category
  *  can't bury the others, with a one-click fix for orphans. */
-export class IntegrityModal extends Modal {
+export class IntegrityModal extends TrynalistModal {
 	constructor(
 		private appRef: App,
 		private report: { docs: number; nodes: number; problems: Array<{ kind: string; detail: string; path: string }> },
@@ -321,7 +322,7 @@ export class IntegrityModal extends Modal {
 }
 
 /** Paste-an-outline importer, for when the export isn't a file in the vault. */
-export class ImportTextModal extends Modal {
+export class ImportTextModal extends TrynalistModal {
 	private text = "";
 	private title = "";
 
@@ -359,7 +360,7 @@ export class ImportTextModal extends Modal {
 
 /** Paste-a-token prompt shown when the import command runs with nothing stored,
  *  so the flow starts from the command, not a detour into Settings. */
-export class DynalistTokenModal extends Modal {
+export class DynalistTokenModal extends TrynalistModal {
 	private token = "";
 	private remember: boolean;
 
@@ -409,7 +410,7 @@ export class DynalistTokenModal extends Modal {
 
 /** Search and replace across a document, or within one item's subtree —
  *  Dynalist offered both scopes. Counts matches before changing anything. */
-export class ReplaceModal extends Modal {
+export class ReplaceModal extends TrynalistModal {
 	private find = "";
 	private replace = "";
 	private matchCase = false;
@@ -470,7 +471,7 @@ export class ReplaceModal extends Modal {
  *  differ (we have no `within:`, they have no `has:children`), and a lifted
  *  list would quietly claim support we do not have. The page is credited and
  *  linked for the operators we inherited the syntax from. */
-export class OperatorHelpModal extends Modal {
+export class OperatorHelpModal extends TrynalistModal {
 	onOpen(): void {
 		const { contentEl, titleEl } = this;
 		titleEl.setText("Search operators");
@@ -576,7 +577,7 @@ export class OperatorHelpModal extends Modal {
  *  rail is what makes this more than a lightbox: images in an outline are
  *  usually a set (screenshots of one thing, photos from one day), and finding
  *  the next one otherwise means closing this, scrolling, and clicking again. */
-export class ImageViewerModal extends Modal {
+export class ImageViewerModal extends TrynalistModal {
 	private at = 0;
 
 	constructor(app: App, private images: TFile[], startPath: string) {

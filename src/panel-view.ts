@@ -1,4 +1,5 @@
-import { ItemView, Menu, Modal, Notice, Setting, TFile, TFolder, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, Menu, Notice, Setting, TFile, TFolder, WorkspaceLeaf, setIcon } from "obsidian";
+import { TrynalistModal } from "./trynalist-modal";
 import type TrynalistPlugin from "./main";
 import { ConfirmModal, PromptModal } from "./modals";
 import { createDoc, duplicateDoc, renameDoc, scanDocs, setDocArchived } from "./store";
@@ -53,7 +54,7 @@ function groupFolders(app: TrynalistPanelView["app"], rootFolder: string): strin
 
 /** New grouping folder, with a choice of where it goes — so a folder can be
  *  made a subfolder of an existing one rather than always landing at the top. */
-class NewFolderModal extends Modal {
+class NewFolderModal extends TrynalistModal {
 	constructor(
 		private plugin: TrynalistPlugin,
 		private onSubmit: (parent: string, name: string) => void,
@@ -98,7 +99,7 @@ class NewFolderModal extends Modal {
 	onClose(): void { this.contentEl.empty(); }
 }
 
-class NewDocModal extends Modal {
+class NewDocModal extends TrynalistModal {
 	/** targetFolder: vault path the doc folder is created under (a grouping
 	 *  folder, or the root). */
 	constructor(

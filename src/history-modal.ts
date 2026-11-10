@@ -1,4 +1,5 @@
-import { App, Modal, Notice } from "obsidian";
+import { App, Notice } from "obsidian";
+import { TrynalistModal } from "./trynalist-modal";
 import { dedupeVersions } from "./item-history";
 import type { HistoryEntry, ItemVersion } from "./item-history";
 
@@ -52,7 +53,7 @@ function paintVersion(row: HTMLElement, v: { text: string; note: string }, head:
 /** The versions of one item this device recorded, newest first, each with a
  *  Restore button. Daily snapshots are searched only when asked: reading them
  *  means inflating up to a month of zips. */
-export class ItemHistoryModal extends Modal {
+export class ItemHistoryModal extends TrynalistModal {
 	private versions: ItemVersion[] = [];
 	private snapshotsLoaded = false;
 	private listEl!: HTMLElement;
@@ -142,7 +143,7 @@ export class ItemHistoryModal extends Modal {
 
 /** Items deleted in the last 30 days (by this device, or by a sync from
  *  another one) that exist nowhere under the root any more. */
-export class RecentlyDeletedModal extends Modal {
+export class RecentlyDeletedModal extends TrynalistModal {
 	constructor(app: App, private opts: {
 		load: () => Promise<Array<HistoryEntry & { docTitle: string | null }>>;
 		onRestore: (e: HistoryEntry) => Promise<boolean>;

@@ -385,6 +385,16 @@ export class TrynalistDocView extends FileView {
 		return !!active?.instanceOf(HTMLElement) && this.containerEl.contains(active);
 	}
 
+	/** Toolbar action: blurring the field is what takes the keyboard down. */
+	dismissKeyboard(): void {
+		const active = this.containerEl.ownerDocument.activeElement;
+		if (active?.instanceOf(HTMLElement) && this.containerEl.contains(active)) active.blur();
+		// Otherwise the next repaint (folding, a zoom, a sync) puts the caret
+		// back in the remembered row and the keyboard comes straight back up.
+		this.focusId = null;
+		this.focusCaret = -1;
+	}
+
 	/** Command entry point for the in-item line break, so it also gets a real
 	 *  Obsidian hotkey registration — the Scope binding alone was reported dead
 	 *  on macOS, and a command is both reliable and user-rebindable. */
@@ -2801,6 +2811,7 @@ export class TrynalistDocView extends FileView {
 		const handle = row.createSpan({ cls: "trynalist-menu-handle" });
 		setIcon(handle, "menu");
 		handle.setAttribute("aria-label", "Item menu");
+		this.keepRowFocusOnTouch(handle);
 		handle.addEventListener("click", (e) => {
 			e.stopPropagation();
 			this.openItemMenu(e, n);
@@ -2816,6 +2827,7 @@ export class TrynalistDocView extends FileView {
 		const action = row.createSpan({
 			cls: (bulletZooms ? collapsible : true) ? "trynalist-rowaction" : "trynalist-rowaction is-empty",
 		});
+		this.keepRowFocusOnTouch(action);
 		if (bulletZooms) {
 			if (collapsible) {
 				setIcon(action, n.collapsed ? "plus" : "minus");
@@ -2889,8 +2901,12 @@ export class TrynalistDocView extends FileView {
 			this.zoomRoot = n.id;
 			this.render();
 		});
-		bullet.addEventListener("mouseenter", () => this.showTooltip(bullet, n));
-		bullet.addEventListener("mouseleave", () => this.hideTooltip());
+		// Not on touch: a tap sends a synthetic mouseenter, and content appearing
+		// from it is exactly what makes iOS swallow the tap (see styles.css).
+		if (!Platform.isMobile) {
+			bullet.addEventListener("mouseenter", () => this.showTooltip(bullet, n));
+			bullet.addEventListener("mouseleave", () => this.hideTooltip());
+		}
 		bullet.addEventListener("contextmenu", (e) => { e.preventDefault(); this.openItemMenu(e, n); });
 		if (!flat) this.wireDrag(bullet, row, n);
 
@@ -2983,6 +2999,14 @@ export class TrynalistDocView extends FileView {
 	 *  it sat BELOW the bullet, covering the very children you were reaching
 	 *  for — so it opens above unless there is genuinely no room. */
 	private tooltipTimer: number | null = null;
+
+	/** On touch the row's controls only exist while the row has focus. If the
+	 *  tap's own mousedown took focus away they would vanish before the click
+	 *  landed, so a control must not blur the row it belongs to. */
+	private keepRowFocusOnTouch(control: HTMLElement): void {
+		if (!Platform.isMobile) return;
+		control.addEventListener("mousedown", (e) => e.preventDefault());
+	}
 
 	private showTooltip(anchor: HTMLElement, n: TreeNode): void {
 		this.hideTooltip();
@@ -4082,11 +4106,25 @@ export class TrynalistDocView extends FileView {
 	private ensureRaw(el: HTMLElement, id: TrynaId, isNote: boolean): void {
 		if (el.dataset.rendered !== "1") return;
 		const live = this.index?.nodes.get(id);
-		el.setText(isNote ? (live?.note ?? "") : rowRawToDom(live?.text ?? ""));
+		const raw = isNote ? (live?.note ?? "") : rowRawToDom(live?.text ?? "");
+		// A plain row already shows exactly its source. Rebuilding it anyway
+		// replaces the text node the caret was just placed in, in the middle of
+		// the focus a tap is delivering, and iOS can lose the caret over that.
+		if (el.childElementCount > 0 || el.textContent !== raw) el.setText(raw);
 		delete el.dataset.rendered;
 	}
 
+	/** While the caret is in this text, a sideways drag means "select", not
+	 *  "open a side panel". Only while focused: swiping over the rest of the
+	 *  outline should still reach the drawers. */
+	private ignoreSwipesWhileFocused(el: HTMLElement): void {
+		if (!Platform.isMobile) return;
+		el.addEventListener("focus", () => { el.dataset.ignoreSwipe = "true"; });
+		el.addEventListener("blur", () => { delete el.dataset.ignoreSwipe; });
+	}
+
 	private wireTextEvents(el: HTMLElement, n: TreeNode): void {
+		this.ignoreSwipesWhileFocused(el);
 		this.wirePaste(el, n, false);
 		// Belt and braces: never let an internal row drag be handled as a
 		// native text drop into the editable line.
@@ -4342,6 +4380,7 @@ export class TrynalistDocView extends FileView {
 			this.dirtyNotes.set(n.id, el);
 			this.scheduleNoteSave(n.id);
 		});
+		this.ignoreSwipesWhileFocused(el);
 		el.addEventListener("focus", () => this.ensureRaw(el, n.id, true));
 		el.addEventListener("beforeinput", () => this.ensureRaw(el, n.id, true));
 		el.addEventListener("keydown", (e) => {

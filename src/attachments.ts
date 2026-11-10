@@ -1,4 +1,5 @@
 import { App, Modal, Notice, Setting, TFile, TFolder, setIcon } from "obsidian";
+import { TrynalistModal } from "./trynalist-modal";
 import { DocIndex, listDocs, loadReadOnlyIndex, stripMatches } from "./store";
 import { sift } from "./search";
 import { ATTACHMENTS_SUBFOLDER } from "./types";
@@ -141,7 +142,7 @@ type Filter = "all" | "orphans" | "missing";
 /** Dynalist had a list of links, which the user found unhelpful. This is the
  *  same idea with the actions that make it useful: jump to the item that uses
  *  it, reveal it on disk, preview it, and delete it safely. */
-export class AttachmentsModal extends Modal {
+export class AttachmentsModal extends TrynalistModal {
 	private entries: AttachmentEntry[] = [];
 	private query = "";
 	private filter: Filter = "all";

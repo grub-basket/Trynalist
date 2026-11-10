@@ -32,7 +32,7 @@
 	visibility: hidden;
 	padding: 0 2px;
 }
-.trynalist-doc-row:hover .trynalist-doc-export { visibility: visible; }
+body:not(.is-mobile) .trynalist-doc-row:hover .trynalist-doc-export { visibility: visible; }
 .trynalist-doc-export:hover { color: var(--text-normal); }
 
 /* Doc view */
@@ -128,7 +128,7 @@
 /* Hover only. Keeping it visible on the focused row meant the item you were
    typing in always carried a magnifier — and it sat on the guide line. Touch
    has no hover, so mobile keeps the focus fallback. */
-.trynalist-row:hover .trynalist-rowaction { opacity: 1; }
+body:not(.is-mobile) .trynalist-row:hover .trynalist-rowaction { opacity: 1; }
 .is-mobile .trynalist-row:focus-within .trynalist-rowaction { opacity: 1; }
 .trynalist-rowaction:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
 .trynalist-collapse:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
@@ -137,7 +137,7 @@
 /* Dynalist reveals the collapse arrow on hover, and shows it always when the
    item is collapsed (otherwise hidden children would be invisible). */
 .trynalist-collapse { opacity: 0; transition: opacity 90ms ease; }
-.trynalist-row:hover .trynalist-collapse,
+body:not(.is-mobile) .trynalist-row:hover .trynalist-collapse,
 .trynalist-row:focus-within .trynalist-collapse { opacity: 1; }
 .trynalist-bullet {
 	width: 22px;
@@ -196,8 +196,8 @@
 }
 .trynalist-bullet-hover .svg-icon { width: 13px; height: 13px; }
 .trynalist-bullet-hover.is-inert { color: var(--text-faint); }
-.trynalist-bullet:hover .trynalist-bullet-hover { display: inline-flex; }
-.trynalist-bullet:hover .trynalist-bullet-dot { visibility: hidden; }
+body:not(.is-mobile) .trynalist-bullet:hover .trynalist-bullet-hover { display: inline-flex; }
+body:not(.is-mobile) .trynalist-bullet:hover .trynalist-bullet-dot { visibility: hidden; }
 /* Nothing to expand: no pointer affordance, but still a tooltip. */
 .trynalist-bullet:hover { color: var(--interactive-accent); }
 .trynalist-check {
@@ -260,7 +260,7 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	font-size: var(--font-ui-small);
 }
 .trynalist-group-row:hover { background: var(--background-modifier-hover); }
-.trynalist-group-row:hover .trynalist-doc-export { visibility: visible; }
+body:not(.is-mobile) .trynalist-group-row:hover .trynalist-doc-export { visibility: visible; }
 .trynalist-group-tri { width: 12px; font-size: 0.8em; }
 .trynalist-group-name { flex: 1; }
 .trynalist-doc-broken .trynalist-doc-name { color: var(--text-error); }
@@ -281,7 +281,7 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 }
 .trynalist-menu-handle .svg-icon { width: 16px; height: 16px; }
 .trynalist-menu-handle:hover { background: var(--background-modifier-hover); }
-.trynalist-row:hover .trynalist-menu-handle { visibility: visible; }
+body:not(.is-mobile) .trynalist-row:hover .trynalist-menu-handle { visibility: visible; }
 .trynalist-menu-handle:hover { color: var(--text-normal); }
 
 /* Collapsed items get a ring around the bullet (Dynalist affordance).
@@ -597,8 +597,8 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	visibility: hidden;
 }
 .trynalist-row-action .svg-icon { width: 17px; height: 17px; }
-.trynalist-doc-row:hover .trynalist-row-action,
-.trynalist-group-row:hover .trynalist-row-action { visibility: visible; }
+body:not(.is-mobile) .trynalist-doc-row:hover .trynalist-row-action,
+body:not(.is-mobile) .trynalist-group-row:hover .trynalist-row-action { visibility: visible; }
 .trynalist-row-action:hover {
 	background: var(--background-modifier-hover);
 	color: var(--text-normal);
@@ -930,7 +930,7 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 }
 .trynalist-section-label { flex: 1; }
 .trynalist-section-head .trynalist-row-action { opacity: 0; }
-.trynalist-section-head:hover .trynalist-row-action { opacity: 1; }
+body:not(.is-mobile) .trynalist-section-head:hover .trynalist-row-action { opacity: 1; }
 .trynalist-agenda-bucket { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 
 /* Mind map: the sizer carries the scaled footprint so the scrollbars describe
@@ -1485,10 +1485,11 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 	z-index: var(--layer-status-bar);
 	background: var(--background-secondary);
 	border-top: 1px solid var(--background-modifier-border);
-	/* Longhands only, and the inset token rather than a raw env(): the bar sits
-	   above the keyboard when one is open (bottom is set in JS) and above the
-	   home indicator when one is not. */
-	padding-bottom: env(safe-area-inset-bottom, 0px);
+	/* Longhands only. Room for the home indicator, but only while it is what
+	   the bar is sitting on: with the keyboard up the indicator is behind it,
+	   and reserving the inset anyway left a 34pt band above the keys. Obsidian
+	   publishes the keyboard's height, so the subtraction floors to zero. */
+	padding-bottom: max(0px, calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) - var(--keyboard-height, 0px)));
 }
 .trynalist-mobile-toolbar-strip {
 	display: flex;
@@ -1525,6 +1526,94 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 .trynalist-mobile-tool-icon .svg-icon { width: 20px; height: 20px; }
 /* Keep the last row clear of the bar. */
 .is-mobile .trynalist-doc { padding-bottom: 96px; }
+
+/* ── Touch sizing ───────────────────────────────────────────────────────
+   Text, controls and spacing grow together, about 1.15-1.2×, so nothing looks
+   small beside something large. The side padding goes down to pay for it. */
+.is-mobile .trynalist-doc {
+	font-size: calc(var(--font-text-size, 16px) * var(--trynalist-scale, 1) * 1.15);
+	padding-left: 8px;
+	padding-right: 12px;
+	/* The Density setting, in touch terms. Everything vertical below hangs off
+	   this one value. */
+	--tl-touch-pad: 5px;
+}
+.is-mobile .trynalist-doc.tl-density-compact { --tl-touch-pad: 2px; }
+.is-mobile .trynalist-doc.tl-density-comfortable { --tl-touch-pad: 9px; }
+.is-mobile .trynalist-children {
+	/* Same one decision as the desktop values: the guide lands in the gap after
+	   a child's menu icon (6 + 26 + 3), and the indent is whatever puts the
+	   parent's bullet centre (26 + 6 + 26 + 3 + 13 = 74) on that line. */
+	margin-left: 39px;
+	--tl-guide-x: 35px;
+}
+/* The vertical padding is on the text, not the row, so the space between two
+   rows belongs to the text and a tap there still lands on a line. */
+.is-mobile .trynalist-row { padding-top: 0; padding-bottom: 0; min-height: calc(28px + 2 * var(--tl-touch-pad)); }
+.is-mobile .trynalist-text { padding-top: var(--tl-touch-pad); padding-bottom: var(--tl-touch-pad); }
+.is-mobile .trynalist-row > .trynalist-menu-handle,
+.is-mobile .trynalist-row > .trynalist-rowaction,
+.is-mobile .trynalist-row > .trynalist-bullet {
+	width: 26px;
+	height: 26px;
+	margin-top: calc(var(--tl-touch-pad) - 1px);
+	position: relative;
+}
+.is-mobile .trynalist-row > .trynalist-check { margin-top: calc(var(--tl-touch-pad) + 2px); }
+.is-mobile .trynalist-row > .trynalist-bullet.is-numbered { width: auto; min-width: 26px; }
+/* Full row height to the finger; the 26px box stays the visible size so three
+   controls still fit beside each other. */
+.is-mobile .trynalist-row > .trynalist-menu-handle::after,
+.is-mobile .trynalist-row > .trynalist-rowaction::after,
+.is-mobile .trynalist-row > .trynalist-bullet::after {
+	content: "";
+	position: absolute;
+	top: calc(1px - var(--tl-touch-pad));
+	bottom: calc(-3px - var(--tl-touch-pad));
+	left: 0;
+	right: 0;
+}
+.is-mobile .trynalist-menu-handle .svg-icon,
+.is-mobile .trynalist-rowaction .svg-icon { width: 18px; height: 18px; }
+.is-mobile .trynalist-bullet:not(.is-numbered) .trynalist-bullet-dot::before { width: 7px; height: 7px; }
+.is-mobile .trynalist-bullet.has-hidden-children .trynalist-bullet-dot { width: 18px; height: 18px; }
+/* Where the row's text starts: 26 + 6 + 26 + 3 + 26 + 3. */
+.is-mobile .trynalist-note { margin-left: 90px; }
+
+.is-mobile .trynalist-crumbs { font-size: var(--font-ui-medium); }
+/* The header is two 36px rows here, so the search bar's desktop offset of one
+   line would park it behind the header once the outline scrolls. */
+.is-mobile .trynalist-doc .trynalist-search { top: 78px; }
+.is-mobile .trynalist-crumb-actions { flex-wrap: wrap; }
+.is-mobile .trynalist-nav-btn,
+.is-mobile .trynalist-star,
+.is-mobile .trynalist-crumb-actions .trynalist-zap,
+.is-mobile .trynalist-crumb-actions .trynalist-headbtn,
+.is-mobile .trynalist-crumb-actions .trynalist-eye,
+.is-mobile .trynalist-crumb-actions .trynalist-star,
+.is-mobile .trynalist-crumb-actions .trynalist-view-btn {
+	width: 36px;
+	height: 36px;
+}
+.is-mobile .trynalist-nav-btn .svg-icon,
+.is-mobile .trynalist-star .svg-icon,
+.is-mobile .trynalist-crumb-actions .trynalist-zap .svg-icon,
+.is-mobile .trynalist-crumb-actions .trynalist-headbtn .svg-icon,
+.is-mobile .trynalist-crumb-actions .trynalist-eye .svg-icon,
+.is-mobile .trynalist-crumb-actions .trynalist-star .svg-icon,
+.is-mobile .trynalist-crumb-actions .trynalist-view-btn .svg-icon {
+	width: 20px;
+	height: 20px;
+}
+
+/* A phone modal is centred on the whole screen, and the keyboard is drawn over
+   its lower part. A bottom margin as tall as the keyboard centres it in the
+   space that is left instead; the cap keeps a long dialog scrolling inside
+   that space rather than running under the keys. */
+.is-phone .modal.trynalist-modal {
+	margin-bottom: var(--keyboard-height, 0px);
+	max-height: calc(100vh - var(--safe-area-inset-top, 0px) - var(--keyboard-height, 0px));
+}
 
 /* Customise-toolbar dialog: Dynalist's added / more split. */
 .trynalist-customise-head {
@@ -1806,8 +1895,8 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
 
    `:not(:hover)` so the control's own hover tint still wins when the pointer is
    actually on it — same specificity otherwise, and source order would decide. */
-.trynalist-row:hover > .trynalist-rowaction:not(:hover),
-.trynalist-row:hover > .trynalist-collapse:not(:hover) {
+body:not(.is-mobile) .trynalist-row:hover > .trynalist-rowaction:not(:hover),
+body:not(.is-mobile) .trynalist-row:hover > .trynalist-collapse:not(:hover) {
 	background: var(--background-primary);
 }
 /* Above the guide while visible, or raising the guide for hit-testing would
@@ -1815,11 +1904,30 @@ body:not(.trynalist-no-strike) .trynalist-row.is-checked .trynalist-text {
    every other pixel of its height; it only yields the ~20px a visible control
    occupies, and a control is only visible while its row is hovered — which is
    not when you are aiming at the line. */
-.trynalist-row:hover > .trynalist-rowaction,
-.trynalist-row:hover > .trynalist-collapse {
+body:not(.is-mobile) .trynalist-row:hover > .trynalist-rowaction,
+body:not(.is-mobile) .trynalist-row:hover > .trynalist-collapse {
 	position: relative;
 	z-index: 2;
 }
+
+/* Touch has no real hover, but iOS fakes one: a tap first applies :hover, and
+   if that reveals anything (visibility, display) the tap is treated as "show
+   the hover content" and no click is sent. Every row reveals its menu icon on
+   hover, so the first tap on any row did nothing and only the second one
+   focused it. Hover reveals are desktop-only above; here the same controls
+   follow focus, or are simply always there. */
+.is-mobile .trynalist-row:focus-within .trynalist-menu-handle { visibility: visible; }
+.is-mobile .trynalist-row:focus-within > .trynalist-rowaction {
+	position: relative;
+	z-index: 2;
+}
+/* opacity:0 still takes taps. The fake hover used to absorb the first one;
+   without it, a tap left of an unfocused bullet would zoom on an invisible
+   button. */
+.is-mobile .trynalist-row:not(:focus-within) > .trynalist-rowaction { pointer-events: none; }
+.is-mobile .trynalist-doc-export,
+.is-mobile .trynalist-row-action { visibility: visible; }
+.is-mobile .trynalist-section-head .trynalist-row-action { opacity: 1; }
 
 /* ── Search bar ──────────────────────────────────────────────────────── */
 .trynalist-search-box { position: relative; display: flex; align-items: center; flex: 1; }

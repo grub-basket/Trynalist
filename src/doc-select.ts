@@ -1,10 +1,11 @@
-import { App, Modal, Notice, Setting } from "obsidian";
+import { App, Notice, Setting } from "obsidian";
+import { TrynalistModal } from "./trynalist-modal";
 import type { AccountDoc } from "./dynalist-api";
 
 /** Pick a subset of Dynalist documents to import/update — for running over just
  *  a few (e.g. the ones a rate limit left unfinished) instead of the whole
  *  account. A searchable checkbox list with select-all-of-the-current-filter. */
-export class DocSelectModal extends Modal {
+export class DocSelectModal extends TrynalistModal {
 	private selected = new Set<string>();
 	private filter = "";
 	private listEl: HTMLElement | null = null;

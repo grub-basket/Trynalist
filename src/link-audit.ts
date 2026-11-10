@@ -1,4 +1,5 @@
-import { App, Modal, Notice, TFile, setIcon } from "obsidian";
+import { App, Notice, TFile, setIcon } from "obsidian";
+import { TrynalistModal } from "./trynalist-modal";
 import { DocIndex, listDocs, loadReadOnlyIndex } from "./store";
 import { parseMirrorRef } from "./types";
 import type { DocRef } from "./types";
@@ -114,7 +115,7 @@ export function openLinkAudit(app: App, rootFolder: string): void {
 	})();
 }
 
-class LinkAuditModal extends Modal {
+class LinkAuditModal extends TrynalistModal {
 	constructor(app: App, private broken: BrokenLink[]) { super(app); }
 
 	onOpen(): void {

@@ -1,4 +1,5 @@
-import { App, FuzzySuggestModal, Modal, Notice, Setting, TFolder, setIcon } from "obsidian";
+import { App, FuzzySuggestModal, Notice, Setting, TFolder, setIcon } from "obsidian";
+import { TrynalistModal } from "./trynalist-modal";
 import { listDocs, loadReadOnlyIndex } from "./store";
 
 /** Compare two Dynalist import runs and show what changed between them.
@@ -198,7 +199,7 @@ export function openImportDiff(app: App, rootFolder: string): void {
 	}).open();
 }
 
-class ImportDiffModal extends Modal {
+class ImportDiffModal extends TrynalistModal {
 	private hideUnchanged = true;
 	private hideMissing = false;
 
