@@ -3,7 +3,7 @@ import type { TextComponent } from "obsidian";
 import type { Modifier } from "obsidian";
 import { TrynalistPanelView } from "./panel-view";
 import { TrynalistDocView } from "./outline-view";
-import { CustomiseMenuModal } from "./mobile-toolbar";
+import { CustomiseMenuModal, CustomiseToolbarModal } from "./mobile-toolbar";
 import { GLOBAL_SEARCH_VIEW, GlobalSearchView } from "./global-search-view";
 import { DocIndex, appendItemFile, checkIntegrity, createDoc, duplicateDoc, invalidateDocItems, invalidateDocScan, listDocs, reattachOrphans } from "./store";
 import { BookmarkSuggestModal, DocSuggestModal, GlobalSearchModal } from "./search";
@@ -3051,8 +3051,22 @@ class TrynalistSettingTab extends PluginSettingTab {
 					new Notice("Trynalist: open a document first, so the menu's entries can be read.");
 					return;
 				}
-				new CustomiseMenuModal(this.app, this.plugin, view.itemMenuCatalogue(), () => {
+				const { ids, icons } = view.itemMenuCatalogue();
+				new CustomiseMenuModal(this.app, this.plugin, ids, () => {
 					// Nothing to repaint: the menu is rebuilt on every right-click.
+				}, icons).open();
+			}));
+
+		// Also reachable from the gear at the end of the toolbar itself; here so
+		// it can be found without opening a document on a phone first.
+		new Setting(containerEl)
+			.setName("Customise the mobile toolbar")
+			.setDesc("Choose and order the buttons on the bar above the keyboard on phones and tablets.")
+			.addButton((b) => b.setButtonText("Customise").onClick(() => {
+				new CustomiseToolbarModal(this.app, this.plugin, () => {
+					for (const leaf of this.app.workspace.getLeavesOfType(DOC_VIEW_TYPE)) {
+						if (leaf.view instanceof TrynalistDocView) leaf.view.refreshToolbar();
+					}
 				}).open();
 			}));
 

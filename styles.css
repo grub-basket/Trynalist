@@ -1491,6 +1491,9 @@ body:not(.is-mobile) .trynalist-section-head:hover .trynalist-row-action { opaci
 	   publishes the keyboard's height, so the subtraction floors to zero. */
 	padding-bottom: max(0px, calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) - var(--keyboard-height, 0px)));
 }
+/* Riding above Obsidian's bottom bar (keyboard down): that bar already covers
+   the home indicator. Set from src/mobile-toolbar.ts. */
+.trynalist-mobile-toolbar.is-above-navbar { padding-bottom: 0; }
 .trynalist-mobile-toolbar-strip {
 	display: flex;
 	align-items: center;
@@ -1524,8 +1527,11 @@ body:not(.is-mobile) .trynalist-section-head:hover .trynalist-row-action { opaci
 .trynalist-mobile-tool:active { background: var(--background-modifier-active-hover); }
 .trynalist-mobile-tool-icon { display: inline-flex; }
 .trynalist-mobile-tool-icon .svg-icon { width: 20px; height: 20px; }
-/* Keep the last row clear of the bar. */
-.is-mobile .trynalist-doc { padding-bottom: 96px; }
+/* Keep the last row clear of the bar, plus Obsidian's bottom bar where that
+   one overlays the view (--view-bottom-spacing is 0 when it doesn't). The
+   floor matters: with the floating bar and the keyboard up, Obsidian's value
+   goes far negative, and a negative padding is clamped to nothing. */
+.is-mobile .trynalist-doc { padding-bottom: max(96px, calc(96px + var(--view-bottom-spacing, 0px))); }
 
 /* ── Touch sizing ───────────────────────────────────────────────────────
    Text, controls and spacing grow together, about 1.15-1.2×, so nothing looks

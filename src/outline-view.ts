@@ -1,4 +1,4 @@
-import { Component, FileView, MarkdownRenderer, Menu, Notice, Scope, TFile, TFolder, Platform, WorkspaceLeaf, getLinkpath, setIcon, setTooltip, normalizePath } from "obsidian";
+import { Component, FileView, MarkdownRenderer, Menu, MenuItem, Notice, Scope, TFile, TFolder, Platform, WorkspaceLeaf, getLinkpath, setIcon, setTooltip, normalizePath } from "obsidian";
 
 /** An item id as it may safely appear inside an attribute selector. Ids are
  *  base36 from our own generator, but a hand-written or foreign file can carry
@@ -3125,7 +3125,7 @@ export class TrynalistDocView extends FileView {
 	/** Every entry the item menu can show, for the customiser. Built by running
 	 *  the menu against a throwaway Menu so the list can never drift from what
 	 *  the menu actually offers — a hand-kept copy would. */
-	itemMenuCatalogue(): string[] {
+	itemMenuCatalogue(): { ids: string[]; icons: Record<string, string> } {
 		const idx = this.index;
 		// Probe with an item that HAS children. Several entries — collapse, the
 		// checkbox-children pair — only register for a parent, so probing the
@@ -3135,11 +3135,18 @@ export class TrynalistDocView extends FileView {
 			? ([...idx.nodes.values()].find((n) => idx.children(n.id).length)
 				?? [...idx.nodes.values()][0])
 			: null;
-		if (!sample) return [];
+		if (!sample) return { ids: [], icons: {} };
 		const ids: string[] = [];
+		const icons: Record<string, string> = {};
 		const realEmit = this.emitMenu.bind(this);
 		try {
-			this.emitMenu = (_m, parts) => { for (const p of parts) ids.push(p.id); };
+			this.emitMenu = (_m, parts: Array<{ id: string; build?: (item: MenuItem) => unknown }>) => {
+				for (const p of parts) {
+					ids.push(p.id);
+					const icon = p.build ? TrynalistDocView.probeIcon(p.build) : null;
+					if (icon) icons[p.id] = icon;
+				}
+			};
 			// The choice grids attach to the real Menu object, and openItemMenu
 			// shows it at the (synthetic, 0,0) event — a stray menu popped behind
 			// the customiser. The flag suppresses the show while probing.
@@ -3149,8 +3156,26 @@ export class TrynalistDocView extends FileView {
 			this.probingMenu = false;
 			this.emitMenu = realEmit;
 		}
-		return ids;
+		return { ids, icons };
 	}
+
+	/** The icon a menu entry sets, read by running its builder against a stand-in
+	 *  item that accepts any call. Read from the entry itself so the customiser
+	 *  shows exactly what the menu shows, with no second list to keep in step. */
+	private static probeIcon(build: (item: MenuItem) => unknown): string | null {
+		let icon: string | null = null;
+		const stub: unknown = new Proxy(function stand() { /* stand-in */ }, {
+			get: (_t, key) => key === "setIcon"
+				? (name: string | null) => { icon = name; return stub; }
+				: stub,
+			apply: () => stub,
+		});
+		try { build(stub as MenuItem); } catch { /* an entry that needs a real item just shows no icon */ }
+		return icon;
+	}
+
+	/** Rebuild the keyboard toolbar after its buttons are customised elsewhere. */
+	refreshToolbar(): void { this.mobileToolbar?.renderButtons(); }
 
 	private probingMenu = false;
 
@@ -3163,9 +3188,9 @@ export class TrynalistDocView extends FileView {
 		// user's order. A menu built straight into `menu` is fixed in source order
 		// by definition; collecting first is what makes it reorderable and
 		// hideable from settings without touching any of the callbacks below.
-		const parts: Array<{ id: string; add: () => void }> = [];
+		const parts: Array<{ id: string; add: () => void; build?: (item: MenuItem) => unknown }> = [];
 		const at = (id: string, cb: Parameters<Menu["addItem"]>[0]): void => {
-			parts.push({ id, add: () => menu.addItem(cb) });
+			parts.push({ id, add: () => menu.addItem(cb), build: cb });
 		};
 		const atRaw = (id: string, add: () => void): void => { parts.push({ id, add }); };
 		// Dynalist's grouping, in its order: the collapse family first, because
@@ -3432,8 +3457,8 @@ export class TrynalistDocView extends FileView {
 		// otherwise means knowing it exists and going to look in Settings.
 		at("customise", (i) => i.setTitle("Customise this menu…").setIcon("settings")
 			.onClick(() => {
-				const catalogue = this.itemMenuCatalogue();
-				new CustomiseMenuModal(this.app, this.plugin, catalogue, () => { /* rebuilt on next open */ }).open();
+				const { ids, icons } = this.itemMenuCatalogue();
+				new CustomiseMenuModal(this.app, this.plugin, ids, () => { /* rebuilt on next open */ }, icons).open();
 			}));
 		at("delete-checked", (i) => i.setTitle("Delete checked items").setIcon("clipboard-x")
 			.onClick(() => { this.focusId = n.id; void this.cmdDeleteChecked(n.id); }));

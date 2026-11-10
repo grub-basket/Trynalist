@@ -22,6 +22,9 @@ export const TOOLBAR_ACTIONS: ToolbarAction[] = [
 	{ id: "outdent", label: "Unindent", icon: "indent-decrease", run: (v) => v.cmdIndent(true) },
 	{ id: "indent", label: "Indent", icon: "indent-increase", run: (v) => v.cmdIndent(false) },
 	{ id: "dismiss-keyboard", label: "Dismiss keyboard", icon: "keyboard-off", run: (v) => v.dismissKeyboard(), toolbarOnly: true },
+	// Typing bursts are undo steps too, so these cover text as well as structure.
+	{ id: "undo", label: "Undo", icon: "undo-2", run: (v) => v.undo() },
+	{ id: "redo", label: "Redo", icon: "redo-2", run: (v) => v.redo() },
 	// The magnifier the document itself uses, not the plain search glass.
 	{ id: "zoom-in", label: "Zoom in", icon: "zoom-in", run: (v) => v.cmdZoomIn() },
 	{ id: "edit-note", label: "Edit note", icon: "text", run: (v) => v.focusNoteOfFocused() },
@@ -84,6 +87,13 @@ export class MobileToolbar {
 	private onViewportResize: (() => void) | null = null;
 	private caretFrame = 0;
 	private caretRetry = 0;
+	private settleTimer = 0;
+	private navObserver: MutationObserver | null = null;
+	private onNavTransition: ((e: TransitionEvent) => void) | null = null;
+	private onKeyboardShow: (() => void) | null = null;
+	private onKeyboardHide: (() => void) | null = null;
+	/** Set by Obsidian's keyboardWillShow / keyboardWillHide window events. */
+	private softKeyboard = false;
 
 	constructor(private view: TrynalistDocView, private plugin: TrynalistPlugin) {}
 
@@ -153,29 +163,106 @@ export class MobileToolbar {
 	 *  `position: fixed; bottom: 0` is wrong on iOS: the visual viewport shrinks
 	 *  when the keyboard opens but the layout viewport does not, so the bar
 	 *  stays pinned to the bottom of the PAGE, underneath the keyboard. The gap
-	 *  between the two viewports is exactly the keyboard's height. */
+	 *  between the two viewports is exactly the keyboard's height.
+	 *
+	 *  With the keyboard down, Obsidian's phone bottom bar is back, and a bar at
+	 *  the bottom of the screen sat on top of it. It then rides just above that
+	 *  bar instead. */
 	private trackKeyboard(): void {
 		const vv = window.visualViewport;
 		if (!vv || !this.el) return;
+		const doc = this.el.doc;
+		let tallest = vv.height;
+		let lastWidth = vv.width;
 		const apply = (): void => {
 			if (!this.el) return;
-			const hidden = window.innerHeight - vv.height - vv.offsetTop;
-			this.el.style.bottom = `${Math.max(0, hidden)}px`;
+			const hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+			// The tallest the viewport has been at this width: a keyboard
+			// shrinks it whether or not the page itself is resized with it.
+			if (vv.width !== lastWidth) { lastWidth = vv.width; tallest = vv.height; }
+			tallest = Math.max(tallest, vv.height);
+			// Any one signal is enough. The webview resizes itself on iOS, which
+			// leaves `hidden` at zero and --keyboard-height unset, so on its own
+			// the old check missed the keyboard and lifted the bar by the height
+			// of a bottom bar Obsidian had already hidden for the keyboard (its
+			// hide is the same slide the measurement below ignores).
+			const obsKeyboard = parseFloat(getComputedStyle(doc.documentElement).getPropertyValue("--keyboard-height")) || 0;
+			const platformFlag = (Platform as { mobileSoftKeyboardVisible?: boolean }).mobileSoftKeyboardVisible === true;
+			// The indirect signals only count while something can take typing: a
+			// soft keyboard needs a focused field. That keeps a stale event flag
+			// (a hide that never arrived) or a window shortened by split screen
+			// from dropping the bar onto Obsidian's bottom bar.
+			const active = doc.activeElement;
+			const editing = !!active && active.instanceOf(HTMLElement)
+				&& (active.isContentEditable || active.tagName === "INPUT" || active.tagName === "TEXTAREA");
+			const keyboardUp = hidden > 100 || obsKeyboard > 0
+				|| (editing && (this.softKeyboard || platformFlag || tallest - vv.height > 120));
+			const nav = keyboardUp ? 0 : this.navbarClearance();
+			// The bottom bar already covers the home indicator, so the inset
+			// padding goes too.
+			this.el.toggleClass("is-above-navbar", nav > 0);
+			// Flush on it: a gap let the outline show through between the two.
+			this.el.style.bottom = `${nav > 0 ? nav : hidden}px`;
 		};
 		const onResize = (): void => {
 			apply();
 			this.requestCaretClear();
 			// The scroller shrinks a beat after the viewport does, and until it
-			// has there may be nothing left to scroll.
+			// has there may be nothing left to scroll. The bottom bar animates
+			// back in over about the same time.
 			window.clearTimeout(this.caretRetry);
 			this.caretRetry = window.setTimeout(this.requestCaretClear, 350);
+			window.clearTimeout(this.settleTimer);
+			this.settleTimer = window.setTimeout(apply, 350);
 		};
 		this.onViewportChange = apply;
 		this.onViewportResize = onResize;
 		vv.addEventListener("resize", onResize);
 		vv.addEventListener("scroll", apply);
-		this.el.doc.addEventListener("selectionchange", this.requestCaretClear);
+		doc.addEventListener("selectionchange", this.requestCaretClear);
+		// The bar's mode is a body class Obsidian flips from its settings or on
+		// scroll, with no event, and it slides into place with a transition.
+		const NAV_CLASSES = ["is-floating-nav", "auto-full-screen", "is-hidden-nav", "is-phone", "is-tablet"];
+		const navSig = (): string => NAV_CLASSES.filter((c) => doc.body.classList.contains(c)).join(" ");
+		let lastSig = navSig();
+		this.navObserver = new MutationObserver(() => {
+			const sig = navSig();
+			if (sig === lastSig) return;
+			lastSig = sig;
+			onResize();
+		});
+		this.navObserver.observe(doc.body, { attributes: true, attributeFilter: ["class"] });
+		this.onNavTransition = (e: TransitionEvent): void => {
+			const t = e.target;
+			if (t instanceof HTMLElement && t.classList.contains("mobile-navbar")) apply();
+		};
+		doc.addEventListener("transitionend", this.onNavTransition);
+		// Obsidian's own keyboard events, the same ones that hide and show its
+		// bottom bar. They arrive before the viewport changes.
+		this.onKeyboardShow = (): void => { this.softKeyboard = true; onResize(); };
+		this.onKeyboardHide = (): void => { this.softKeyboard = false; onResize(); };
+		window.addEventListener("keyboardWillShow", this.onKeyboardShow);
+		window.addEventListener("keyboardWillHide", this.onKeyboardHide);
 		apply();
+	}
+
+	/** How far Obsidian's phone bottom bar reaches up from the bottom of the
+	 *  screen, measured from where it RESTS: the slide it does when it auto-hides
+	 *  on scroll is taken out, so this bar doesn't bob up and down with it.
+	 *  0 when there is no bar (tablets hide it). Same measurement Stashpad uses
+	 *  for its composer. */
+	private navbarClearance(): number {
+		const doc = this.el?.doc;
+		const bar = doc?.querySelector<HTMLElement>(".mobile-navbar");
+		if (!bar || !bar.isConnected) return 0;
+		const cs = getComputedStyle(bar);
+		if (cs.display === "none" || bar.offsetHeight === 0) return 0;
+		let ty = 0;
+		if (cs.transform && cs.transform !== "none") {
+			try { ty = new DOMMatrixReadOnly(cs.transform).m42; } catch { ty = 0; }
+		}
+		const restingTop = bar.getBoundingClientRect().top - ty;
+		return Math.max(0, Math.round(window.innerHeight - restingTop));
 	}
 
 	private requestCaretClear = (): void => {
@@ -225,6 +312,15 @@ export class MobileToolbar {
 		this.onViewportChange = null;
 		this.onViewportResize = null;
 		this.el?.doc.removeEventListener("selectionchange", this.requestCaretClear);
+		if (this.onNavTransition) this.el?.doc.removeEventListener("transitionend", this.onNavTransition);
+		if (this.onKeyboardShow) window.removeEventListener("keyboardWillShow", this.onKeyboardShow);
+		if (this.onKeyboardHide) window.removeEventListener("keyboardWillHide", this.onKeyboardHide);
+		this.onKeyboardShow = null;
+		this.onKeyboardHide = null;
+		this.onNavTransition = null;
+		this.navObserver?.disconnect();
+		this.navObserver = null;
+		window.clearTimeout(this.settleTimer);
 		window.clearTimeout(this.caretRetry);
 		window.cancelAnimationFrame(this.caretFrame);
 		this.caretFrame = 0;
@@ -240,7 +336,7 @@ export class MobileToolbar {
 
 /** Dynalist's "Customize toolbar" screen: added actions in order, each with
  *  remove and move controls, then the ones left over. */
-class CustomiseToolbarModal extends TrynalistModal {
+export class CustomiseToolbarModal extends TrynalistModal {
 	private chosen: string[];
 
 	constructor(app: App, private plugin: TrynalistPlugin, private onSave: () => void) {
@@ -406,6 +502,7 @@ export class CustomiseMenuModal extends TrynalistModal {
 		private plugin: TrynalistPlugin,
 		private catalogue: string[],
 		private onSave: () => void,
+		private icons: Record<string, string> = {},
 	) {
 		super(app);
 		const saved = plugin.settings.itemMenuOrder ?? [];
@@ -443,8 +540,12 @@ export class CustomiseMenuModal extends TrynalistModal {
 				if (shown) this.hidden.add(id); else this.hidden.delete(id);
 				this.render();
 			});
+			// The same icon the menu shows; an empty slot keeps the names aligned.
+			const icon = row.createSpan({ cls: "trynalist-customise-icon" });
+			const iconName = this.icons[id];
+			if (iconName) setIcon(icon, iconName);
 			const label = row.createSpan({ cls: "trynalist-customise-label", text: menuEntryLabel(id) });
-			if (!shown) label.addClass("is-hidden-entry");
+			if (!shown) { label.addClass("is-hidden-entry"); icon.addClass("is-hidden-entry"); }
 			const moves = row.createDiv({ cls: "trynalist-customise-moves" });
 			if (at > 0) this.move(moves, id, at, -1);
 			if (at < this.order.length - 1) this.move(moves, id, at, 1);
