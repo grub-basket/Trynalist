@@ -1,5 +1,5 @@
 import { App, Notice, TFile, TFolder, normalizePath, parseYaml, stringifyYaml } from "obsidian";
-import { fileNameTemplateUses, itemFileName, newId, refreshFileNameFormat, safeName } from "./id-service";
+import { FOLDER_NAME_MAX, fileNameTemplateUses, fitToPath, itemFileName, newId, refreshFileNameFormat, safeName } from "./id-service";
 import type { FileNameContext } from "./id-service";
 import { primaryDate } from "./dates";
 import { stableStringify } from "./settings-merge";
@@ -22,7 +22,11 @@ const claimedPaths = new Set<string>();
  *  Compared without case: macOS, Windows and iOS disks treat `Topic.md` and
  *  `topic.md` as one file, and Obsidian's create/rename then throw "already
  *  exists". The default slug is lowercase, but `{{text}}` keeps case. */
-function claimItemPath(app: App, folder: string, base: string): string {
+function claimItemPath(app: App, folder: string, wanted: string): string {
+	// Kept within the Windows-safe path length (see fitToPath). Idempotent, so
+	// callers that fitted the name already (materialize's adopt check) get the
+	// same name back.
+	const base = fitToPath(folder, wanted);
 	const dir = app.vault.getFolderByPath(folder);
 	const onDisk = new Set((dir?.children ?? []).map((c) => c.name.toLowerCase()));
 	const taken = (name: string): boolean =>
@@ -141,7 +145,10 @@ function unescapeBreaks(s: string): string {
  *  or the YAML is malformed. Used as a fallback when the metadata cache hasn't
  *  indexed a freshly written file yet. */
 export function parseFrontmatterBlock(raw: string): Record<string, unknown> | null {
-	const m = /^---\n([\s\S]*?)\n---/.exec(raw);
+	// Normalised here rather than by each caller: trash restore and the
+	// Stashpad converter passed raw text, and a CRLF or BOM file read as
+	// having no frontmatter (no id), so a restore laid down a second copy.
+	const m = /^---\n([\s\S]*?)\n---/.exec(normalizeEol(raw));
 	if (!m) return null;
 	try {
 		const parsed: unknown = parseYaml(m[1]);
@@ -182,8 +189,9 @@ export function readItemFile(raw: string): { id: string; fm: Record<string, unkn
 /** Node files are written with LF, but a file that passed through a Windows
  *  editor or another tool can come back CRLF — and every frontmatter splice
  *  here keys on `---\n`. Normalising first means such a file is repaired on its
- *  next save rather than having its frontmatter block silently dropped. */
-function normalizeEol(raw: string): string {
+ *  next save rather than having its frontmatter block silently dropped.
+ *  Exported for the other readers that split frontmatter by hand. */
+export function normalizeEol(raw: string): string {
 	// A UTF-8 byte-order mark in front of `---` hid the frontmatter from every
 	// `startsWith("---\n")` test, so the next save replaced the whole file with
 	// the body and the item lost its id (L55).
@@ -514,7 +522,9 @@ export async function appendItemFile(app: App, docRef: DocRef, parentId: string 
 	if (parentId && parentFile && fileNameTemplateUses("parent")) {
 		try {
 			const raw = await app.vault.cachedRead(parentFile);
-			parentText = splitBody(raw.replace(/^---\n[\s\S]*?\n---\n?/, "")).text;
+			// Normalised first: a parent saved with Windows line endings kept
+			// its whole frontmatter block in the text {{parent}} renders.
+			parentText = splitBody(stripFrontmatter(normalizeEol(raw))).text;
 		} catch { /* no parent text: {{parent}} renders empty */ }
 	}
 	await refreshFileNameFormat();
@@ -527,8 +537,12 @@ export async function appendItemFile(app: App, docRef: DocRef, parentId: string 
 	}
 }
 
-export async function createDoc(app: App, rootFolder: string, title: string): Promise<DocRef> {
-	const safe = safeName(title, "Untitled");
+export async function createDoc(app: App, rootFolder: string, rawTitle: string): Promise<DocRef> {
+	// The title, as the panel and tab show it, keeps up to 120 characters; the
+	// folder and manifest file on disk are capped shorter, so a long title
+	// doesn't eat the Windows path budget (FOLDER_NAME_MAX).
+	const title = safeName(rawTitle, "Untitled");
+	const safe = safeName(rawTitle, "Untitled", FOLDER_NAME_MAX);
 	if (isReservedFolderName(safe)) {
 		throw new Error(`"${safe}" is a reserved folder name — Trynalist and Stashpad both use it for machinery.`);
 	}
@@ -547,7 +561,7 @@ export async function createDoc(app: App, rootFolder: string, title: string): Pr
 		format: "trynalist-doc",
 		version: 1,
 		id: newId(),
-		title: safe,
+		title,
 		created: nowIso(),
 		modified: nowIso(),
 	};
@@ -561,26 +575,60 @@ export async function createDoc(app: App, rootFolder: string, title: string): Pr
 /** Rename a document: folder, manifest file, and the manifest's title, kept in
  *  step. The doc's `id` never changes, so nothing that references it breaks.
  *  Returns the sanitized title actually used. */
-export async function renameDoc(app: App, doc: DocRef, title: string): Promise<string> {
-	const safe = safeName(title, "");
-	if (!safe) throw new Error("A document needs a name.");
+/** The title of the document whose manifest sits in `folderPath`, or null. */
+async function docTitleIn(app: App, folderPath: string): Promise<string | null> {
+	const manifest = app.vault.getFolderByPath(folderPath)?.children
+		.find((c): c is TFile => c instanceof TFile && c.extension === DOC_EXTENSION);
+	if (!manifest) return null;
+	try {
+		const parsed: unknown = JSON.parse(await app.vault.cachedRead(manifest));
+		const t = parsed && typeof parsed === "object" ? (parsed as { title?: unknown }).title : undefined;
+		return typeof t === "string" ? t : null;
+	} catch {
+		return null;
+	}
+}
+
+export async function renameDoc(app: App, doc: DocRef, rawTitle: string): Promise<string> {
+	const title = safeName(rawTitle, "");
+	if (!title) throw new Error("A document needs a name.");
+	// As in createDoc: full title in the manifest, a shorter name on disk.
+	const safe = safeName(rawTitle, "", FOLDER_NAME_MAX);
 	if (isReservedFolderName(safe)) {
 		throw new Error(`"${safe}" is a reserved folder name — pick another.`);
 	}
 	const parentPath = doc.folder.parent?.path ?? "";
-	const targetFolder = normalizePath(parentPath ? `${parentPath}/${safe}` : safe);
+	const inParent = (name: string): string => normalizePath(parentPath ? `${parentPath}/${name}` : name);
+	let targetFolder = inParent(safe);
+	const clash = new Error(`"${title}" already exists in that folder.`);
+	// A sibling document with exactly this title is a clash wherever its
+	// folder sits: earlier versions named folders with the full title, and
+	// numbered folders (`<name> 2`) need not be in order.
+	if (title !== doc.manifest.title) {
+		for (const sib of doc.folder.parent?.children ?? []) {
+			if (!(sib instanceof TFolder) || sib === doc.folder) continue;
+			if (await docTitleIn(app, sib.path) === title) throw clash;
+		}
+	}
 	// Folder first (children move with it), then the manifest inside it.
 	if (targetFolder !== doc.folder.path) {
-		const clash = app.vault.getAbstractFileByPath(targetFolder);
-		if (clash) throw new Error(`"${safe}" already exists in that folder.`);
-		await app.fileManager.renameFile(doc.folder, targetFolder);
+		if (app.vault.getAbstractFileByPath(targetFolder)) {
+			// Two different long titles can share their first 60 characters;
+			// that is not the user's clash, so number the folder instead.
+			if (safe === title) throw clash;
+			let k = 2;
+			while (app.vault.getAbstractFileByPath(targetFolder) && targetFolder !== doc.folder.path) {
+				targetFolder = inParent(`${safe} ${k++}`);
+			}
+		}
+		if (targetFolder !== doc.folder.path) await app.fileManager.renameFile(doc.folder, targetFolder);
 	}
 	const manifestTarget = normalizePath(`${doc.folder.path}/${safe}.${DOC_EXTENSION}`);
 	if (manifestTarget !== doc.file.path) {
 		await app.fileManager.renameFile(doc.file, manifestTarget);
 	}
-	await patchManifest(app, doc, (m) => { m.title = safe; });
-	return safe;
+	await patchManifest(app, doc, (m) => { m.title = title; });
+	return title;
 }
 
 /** Change fields of a document's manifest ON DISK, then mirror the result
@@ -904,7 +952,10 @@ export class DocIndex {
 		// passes through materialize, and most of them name nothing.
 		await refreshFileNameFormat();
 		const folder = this.docRef.folder.path;
-		const base = itemFileName(this.nameContext(n, n.text));
+		// Fitted here as claimItemPath fits it, so the adopt check below looks
+		// for the name a create would actually have used.
+		const full = itemFileName(this.nameContext(n, n.text));
+		const base = fitToPath(folder, full);
 		// The id keeps this unique in normal use, but an update can re-add an item
 		// whose file the metadata cache didn't report (so it looked new) while the
 		// file is still on disk — a bare create would then throw "File already
@@ -912,10 +963,14 @@ export class DocIndex {
 		// adopt it rather than colliding. A template without {{id}} can give two
 		// items one name, so a taken path no longer proves it is this item's:
 		// check each taken candidate (`<name>.md`, `<name> 2.md`, …) in turn.
-		for (let k = 1; ; k++) {
-			const existing = this.app.vault.getAbstractFileByPath(`${folder}/${base}${k === 1 ? "" : ` ${k}`}.md`);
-			if (!(existing instanceof TFile)) break;
-			if (await this.isFileOf(existing, n.id)) { n.file = existing; return; }
+		// In a deep folder, a version before the path budget wrote the full
+		// name, so that one is looked for too.
+		for (const name of base === full ? [base] : [base, full]) {
+			for (let k = 1; ; k++) {
+				const existing = this.app.vault.getAbstractFileByPath(`${folder}/${name}${k === 1 ? "" : ` ${k}`}.md`);
+				if (!(existing instanceof TFile)) break;
+				if (await this.isFileOf(existing, n.id)) { n.file = existing; return; }
+			}
 		}
 		const path = claimItemPath(this.app, folder, base);
 		try {
@@ -943,7 +998,10 @@ export class DocIndex {
 		const cached: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.id;
 		if (cached !== undefined && cached !== null && cached !== "") return idToString(cached as string | number) === id;
 		try {
-			const raw = await this.app.vault.cachedRead(file);
+			// Normalised first, or a file saved with Windows line endings never
+			// matched, so materialize took it for a stranger's and wrote a
+			// duplicate `<name> 2.md` beside it.
+			const raw = normalizeEol(await this.app.vault.cachedRead(file));
 			const front = /^---\n([\s\S]*?)\n---/.exec(raw)?.[1] ?? "";
 			const m = /^id:\s*["']?([^\s"']+)/m.exec(front);
 			return !!m && m[1] === id;
@@ -1358,7 +1416,7 @@ export class DocIndex {
 		if (!withFiles.length) return;
 		if (!this.app.vault.getFolderByPath(trashDir)) await this.app.vault.createFolder(trashDir);
 		const title = this.docRef.manifest.title || "Document";
-		const safe = safeName(title, "Document");
+		const safe = safeName(title, "Document", FOLDER_NAME_MAX);
 		const stamp = nowIso().replace(/[:.]/g, "-");
 		let group = normalizePath(`${trashDir}/${safe} — ${stamp}`);
 		let k = 2;

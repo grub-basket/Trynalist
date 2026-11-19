@@ -1,5 +1,5 @@
 import { App, TFile, moment } from "obsidian";
-import { listDocs } from "./store";
+import { listDocs, normalizeEol } from "./store";
 import { isOverdue, parseAllDates, withoutLinks } from "./dates";
 import type { DocRef, TrynalistSettings } from "./types";
 
@@ -78,7 +78,10 @@ export async function collectDue(
 
 /** The outline line itself: first line after the frontmatter, with the inline
  *  date syntax stripped (the agenda already shows the date separately). */
-function firstBodyLine(raw: string): string {
+function firstBodyLine(source: string): string {
+	// Normalised first: with Windows line endings the `---\n` test failed and
+	// the reminder showed the frontmatter's opening `---` as the item's text.
+	const raw = normalizeEol(source);
 	let body = raw;
 	if (raw.startsWith("---\n")) {
 		const end = raw.indexOf("\n---", 4);

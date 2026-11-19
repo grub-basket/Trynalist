@@ -5,7 +5,7 @@ import { Component, FileView, MarkdownRenderer, Menu, MenuItem, Notice, Scope, T
  *  anything, and an unescaped quote or bracket throws inside querySelector. */
 const cssId = (id: string): string => CSS.escape(String(id));
 import type TrynalistPlugin from "./main";
-import { safeName } from "./id-service";
+import { FOLDER_NAME_MAX, safeName } from "./id-service";
 import { DocIndex, carriedFields, copySubtree, movedFields, createDoc, patchManifest, renameDoc, setDocArchived, stripMatches } from "./store";
 import type { SortMode } from "./store";
 import type { NoteDisplay, SearchMode, SearchSort, TextDirection } from "./types";
@@ -3963,7 +3963,8 @@ export class TrynalistDocView extends FileView {
 		const dot = name.lastIndexOf(".");
 		const rawExt = dot > 0 ? name.slice(dot + 1) : "";
 		const extClean = /^[A-Za-z0-9]{1,8}$/.test(rawExt) ? rawExt.toLowerCase() : "";
-		const stem = safeName(extClean ? name.slice(0, dot) : name, "pasted");
+		// Attachments sit two levels inside the document; capped like folders.
+		const stem = safeName(extClean ? name.slice(0, dot) : name, "pasted", FOLDER_NAME_MAX);
 		const ext = extClean ? `.${extClean}` : "";
 		let candidate = normalizePath(`${base}/${stem}${ext}`);
 		let n = 2;

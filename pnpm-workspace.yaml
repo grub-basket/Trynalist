@@ -1,0 +1,4 @@
+# Allow esbuild's postinstall script (downloads its native binary). pnpm 11+
+# blocks all install scripts by default; this opts esbuild in.
+allowBuilds:
+  esbuild: true

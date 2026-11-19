@@ -203,6 +203,9 @@ function planDocuments(files: DlFile[], rootId: string): { docs: PlannedDoc[]; f
  *  created verbatim, and discovery skips reserved names, so every document
  *  inside it would silently vanish from the panel. */
 function sanitizeFolder(title: string): string {
+	// Deliberately NOT capped at FOLDER_NAME_MAX: update and resume rebuild
+	// these paths and must land in the folders earlier versions wrote, and
+	// two Dynalist folders sharing their first 60 characters would merge.
 	const safe = safeName(title, "Untitled");
 	return isReservedFolderName(safe) ? `${safe} (folder)` : safe;
 }

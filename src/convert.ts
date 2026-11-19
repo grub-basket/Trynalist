@@ -1,6 +1,6 @@
 import { App, Notice, TFile, TFolder, normalizePath } from "obsidian";
 import { newId } from "./id-service";
-import { colorIndexOf, parseFrontmatterBlock } from "./store";
+import { colorIndexOf, normalizeEol, parseFrontmatterBlock } from "./store";
 import { DOC_EXTENSION } from "./types";
 import type { DocManifest } from "./types";
 
@@ -90,7 +90,9 @@ async function readFrontmatterScalars(
 ): Promise<Record<string, string>> {
 	const out: Record<string, string> = {};
 	try {
-		const raw = await app.vault.read(file);
+		// Normalised first: a Stashpad note saved with Windows line endings
+		// failed the `---\n` test, so its order and dates were silently lost.
+		const raw = normalizeEol(await app.vault.read(file));
 		if (!raw.startsWith("---\n")) return out;
 		const end = raw.indexOf("\n---", 4);
 		if (end === -1) return out;

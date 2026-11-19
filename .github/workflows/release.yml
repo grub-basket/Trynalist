@@ -66,15 +66,14 @@ jobs:
       # The store's build verification compares the release asset with a build
       # from source, so the asset is built here, not taken from the committed
       # main.js (which stays in the repo for reference and BRAT-from-source).
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
+      # pnpm with the committed lockfile (fails if it has drifted from
+      # package.json); pnpm-workspace.yaml's allowBuilds entry lets esbuild
+      # fetch its native binary on pnpm 11+.
       - name: Build main.js from source
         run: |
-          npm ci
-          npm run build
+          npm install -g pnpm
+          pnpm install --frozen-lockfile
+          pnpm run build
           test -s main.js
 
       - name: Tag, release, and upload the assets BRAT needs

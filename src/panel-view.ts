@@ -8,7 +8,7 @@ import type { DocRef } from "./types";
 import { describeDue } from "./reminders";
 import type { DueItem } from "./reminders";
 import { DOC_EXTENSION, PANEL_VIEW_TYPE, isReservedFolderName } from "./types";
-import { newId, safeName } from "./id-service";
+import { FOLDER_NAME_MAX, newId, safeName } from "./id-service";
 import { parseImport, writeImport } from "./import";
 import { openTrash } from "./trash";
 import {
@@ -86,7 +86,9 @@ class NewFolderModal extends TrynalistModal {
 			// Path separators and the rest would silently create nesting or fail
 			// on some filesystems; fold them to a dash. safeName also refuses
 			// `..` (the parent folder) and leading dots (hidden from Obsidian).
-			const clean = safeName(name, "");
+			// Capped short: folders stack, and the whole path has to fit
+			// Windows' limit (FOLDER_NAME_MAX).
+			const clean = safeName(name, "", FOLDER_NAME_MAX);
 			if (!clean) return;
 			if (isReservedFolderName(clean)) { new Notice(`Trynalist: "${clean}" is a reserved folder name.`); return; }
 			this.close();
@@ -796,7 +798,9 @@ export class TrynalistPanelView extends ItemView {
 
 	private async splitDuplicate(file: TFile, folderName: string): Promise<void> {
 		const parent = file.parent?.parent?.path ?? this.plugin.settings.rootFolder;
-		const clean = safeName(folderName, "");
+		// Full title in the manifest, a shorter name on disk (as createDoc).
+		const title = safeName(folderName, "");
+		const clean = safeName(folderName, "", FOLDER_NAME_MAX);
 		if (!clean) return;
 		const dest = `${parent}/${clean}`;
 		if (this.app.vault.getAbstractFileByPath(dest)) {
@@ -809,7 +813,7 @@ export class TrynalistPanelView extends ItemView {
 			// Its title should match its new home.
 			const raw = await this.app.vault.adapter.read(`${dest}/${clean}.${DOC_EXTENSION}`);
 			const manifest = JSON.parse(raw) as Record<string, unknown>;
-			manifest.title = clean;
+			manifest.title = title;
 			manifest.modified = new Date().toISOString();
 			await this.app.vault.adapter.write(`${dest}/${clean}.${DOC_EXTENSION}`, JSON.stringify(manifest, null, 2));
 			this.lastSignature = "";

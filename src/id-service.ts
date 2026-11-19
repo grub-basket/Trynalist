@@ -27,6 +27,10 @@ export function slugFor(text: string): string {
 		// could never be followed.
 		.replace(/!\([^)]*\)/g, " ")
 		.replace(/[#[\]|^:\\/*?"<>()!%`]/g, " ")
+		// Control characters (a pasted terminal escape, a stray form feed)
+		// are legal in macOS names but Windows refuses to create or sync a
+		// file carrying one (N5).
+		.replace(CONTROL_CHARS_RE, " ")
 		.trim()
 		.split(/\s+/)
 		.slice(0, 6)
@@ -196,6 +200,53 @@ function capBytes(name: string, max = 200): string {
 	return out.replace(/[\s\-_.]+$/, "");
 }
 
+/** The longest vault-relative path a new item file is given. Windows' classic
+ *  limit is 260 characters for the WHOLE path, vault location included
+ *  (`C:\Users\<name>\Documents\<vault>\` is typically 40-60), and File
+ *  Explorer, OneDrive, git and zip tools still enforce it. A deep Dynalist
+ *  import put item files past it: run folder, nested folders and document
+ *  folder can be 160+ characters before the file name starts. Counted in
+ *  UTF-16 units, as Windows counts. */
+export const MAX_VAULT_PATH = 200;
+
+/** A Trynalist id at the end of a name (`…-k3j9x0a2mq`). */
+const ID_TAIL_RE = /[-_ ]([a-z0-9]{10})$/;
+
+/** `base` shortened, if needed, so `<folder>/<base> 99<ext>` stays within
+ *  MAX_VAULT_PATH. A trailing item id is kept and the words before it are
+ *  cut, so the name still says which item it is. Never shorter than 20
+ *  characters: a folder that is already too deep is not fixed by a file
+ *  name of nothing. Names are given once, at creation, so existing files
+ *  keep theirs. */
+export function fitToPath(folder: string, base: string, ext = ".md", max = MAX_VAULT_PATH): string {
+	// "/" + extension + room for a collision suffix such as " 12".
+	const room = Math.max(20, max - folder.length - 1 - ext.length - 3);
+	if (base.length <= room) return base;
+	const cut = (s: string, limit: number): string => {
+		let out = "";
+		for (const ch of s) {
+			if (out.length + ch.length > limit) break;
+			out += ch;
+		}
+		// Windows drops trailing dots and spaces, and a dangling dash reads oddly.
+		return out.replace(/[\s\-_.]+$/, "");
+	};
+	const tail = ID_TAIL_RE.exec(base);
+	if (tail) {
+		const head = cut(base.slice(0, tail.index), room - tail[0].length);
+		return head ? `${head}${tail[0]}` : tail[1];
+	}
+	return cut(base, room) || cut(base, 20) || base;
+}
+
+/** Cap for a FOLDER or file name made from a title (document folders and
+ *  their manifest files, Dynalist folders, plain folders, trash groups,
+ *  pasted attachments). Folders stack, and the path budget above is only
+ *  reachable if each level stays modest. A document's title is kept in
+ *  full (safeName's default 120) in its manifest, which is what the panel
+ *  and the tab show; only the name on disk is shortened. */
+export const FOLDER_NAME_MAX = 60;
+
 /** A filesystem- and Obsidian-safe folder/file NAME from free text. One place
  *  for every title that becomes a path component (documents, Dynalist folders,
  *  trash groups, grouping folders): strips the characters the filesystem and
@@ -204,7 +255,7 @@ function capBytes(name: string, max = 200): string {
  *  drops them), and the two names that are not names at all: `.` and `..`,
  *  which would resolve to the parent folder. Falls back to `fallback` when
  *  nothing is left. */
-export function safeName(title: string, fallback = "Untitled"): string {
+export function safeName(title: string, fallback = "Untitled", max = 120): string {
 	const cleaned = (title ?? "")
 		.replace(/[\\/:*?"<>|#[\]^]/g, "-")
 		.replace(CONTROL_CHARS_RE, "")
@@ -219,7 +270,8 @@ export function safeName(title: string, fallback = "Untitled"): string {
 	// and a vault synced to Windows broke. Applied on every platform, so the
 	// name is the same everywhere. Cut by code point, not UTF-16 unit.
 	const points = Array.from(cleaned);
-	const bounded = points.length > 120 ? points.slice(0, 120).join("").replace(/[. ]+$/, "") : cleaned;
-	if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(bounded)) return `${bounded} (name)`;
+	const bounded = points.length > max ? points.slice(0, max).join("").replace(/[. ]+$/, "") : cleaned;
+	// Windows also reserves COM and LPT with the superscript digits ¹ ² ³.
+	if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(\..*)?$/i.test(bounded)) return `${bounded} (name)`;
 	return bounded || fallback;
 }
