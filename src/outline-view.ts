@@ -6,6 +6,7 @@ import { Component, FileView, MarkdownRenderer, Menu, MenuItem, Notice, Scope, T
 const cssId = (id: string): string => CSS.escape(String(id));
 import type TrynalistPlugin from "./main";
 import { FOLDER_NAME_MAX, safeName } from "./id-service";
+import { noteShortened } from "./name-index";
 import { DocIndex, carriedFields, copySubtree, movedFields, createDoc, patchManifest, renameDoc, setDocArchived, stripMatches } from "./store";
 import type { SortMode } from "./store";
 import type { NoteDisplay, SearchMode, SearchSort, TextDirection } from "./types";
@@ -3971,6 +3972,9 @@ export class TrynalistDocView extends FileView {
 		while (this.app.vault.getAbstractFileByPath(candidate)) {
 			candidate = normalizePath(`${base}/${stem}-${n++}${ext}`);
 		}
+		// Recorded before the caller writes it; the index drops it if it never does.
+		const fullStem = safeName(extClean ? name.slice(0, dot) : name, "pasted");
+		if (fullStem !== stem) noteShortened(candidate, `${fullStem}${ext}`);
 		return candidate;
 	}
 

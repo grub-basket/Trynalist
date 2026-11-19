@@ -40,6 +40,8 @@ import { TFolder } from "obsidian";
 import { FuzzySuggestModal } from "obsidian";
 import type { DueItem, ReminderState } from "./reminders";
 import type { ClipNode } from "./types";
+import { closeNameIndex, flushNameIndex, noteDeleted, noteRenamed, setNameIndexHost } from "./name-index";
+import { rebuildNameIndex } from "./name-index-rebuild";
 import type { Bookmark, Density, DocManifest, DocRef, DocViewMode, NoteDisplay, TextDirection, TrynalistSettings } from "./types";
 import { DEFAULT_SETTINGS, DOC_EXTENSION, DOC_VIEW_TYPE, MAX_HEADING, PANEL_VIEW_TYPE, isReservedFolderName } from "./types";
 
@@ -167,11 +169,14 @@ export default class TrynalistPlugin extends Plugin {
 		this.registerEvent(this.app.workspace.on("quit", (tasks) => tasks.add(async () => {
 			await this.flushOpenDocs(true);
 			await this.itemHistory?.flush(true);
+			await flushNameIndex();
 		})));
 		this.registerDomEvent(document, "visibilitychange", () => {
 			if (document.visibilityState === "hidden") {
 				// On a phone the app may be killed next: write unsettled moves too.
-				void this.flushOpenDocs(Platform.isMobile).then(() => this.itemHistory?.flush(Platform.isMobile));
+				void this.flushOpenDocs(Platform.isMobile)
+					.then(() => this.itemHistory?.flush(Platform.isMobile))
+					.then(() => flushNameIndex());
 			}
 		});
 		this.register(() => { for (const doc of this.openDocuments()) doc.body.removeClass("trynalist-no-strike"); });
@@ -231,6 +236,13 @@ export default class TrynalistPlugin extends Plugin {
 		this.registerEvent(this.app.vault.on("rename", (f, old) => {
 			if (underRoot(f.path) || underRoot(old)) this.movePathKeys(old, f.path, f instanceof TFolder);
 		}));
+		// The shortened-names index keeps its rows on the paths they describe.
+		// Closed in onunload, after the open documents' last saves.
+		setNameIndexHost(this.app, () => this.settings.rootFolder);
+		this.registerEvent(this.app.vault.on("rename", (f, old) => {
+			if (underRoot(f.path) || underRoot(old)) noteRenamed(old, f.path);
+		}));
+		this.registerEvent(this.app.vault.on("delete", (f) => { if (underRoot(f.path)) noteDeleted(f.path); }));
 		this.registerEvent(this.app.vault.on("modify", (f) => {
 			// A manifest edit changes titles/archived flags: rescan. An item edit
 			// changes nothing structural — the caches below key off the metadata
@@ -256,6 +268,23 @@ export default class TrynalistPlugin extends Plugin {
 		this.registerView(GLOBAL_SEARCH_VIEW, (leaf) => new GlobalSearchView(leaf, this));
 		this.registerTabReturn();
 		this.registerDeepLinks();
+		this.addCommand({
+			id: "rebuild-shortened-names-index",
+			name: "Rebuild the shortened-names index",
+			callback: () => {
+				void (async () => {
+					try {
+						const r = await rebuildNameIndex(this.app, this.settings.rootFolder);
+						new Notice(r.rows || r.removed
+							? `Trynalist: the shortened-names index lists ${r.rows} name${r.rows === 1 ? "" : "s"} (${r.added} added, ${r.removed} removed).`
+							: "Trynalist: no shortened names found.");
+					} catch (e) {
+						console.error("Trynalist: rebuilding the shortened-names index failed", e);
+						new Notice(`Trynalist: could not rebuild the shortened-names index. ${e instanceof Error ? e.message : "See the console."}`);
+					}
+				})();
+			},
+		});
 		this.addCommand({
 			id: "open-panel",
 			name: "Open documents panel",
@@ -2447,6 +2476,9 @@ export default class TrynalistPlugin extends Plugin {
 	onunload(): void {
 		setFileNameFormatRefresher(null);
 		void this.flushOpenDocs();
+		// The last saves (these, and the closing tabs') can name and shorten
+		// files: the index keeps recording for a few seconds, then closes.
+		closeNameIndex();
 		// A coalesced write still pending must land, or the last focus/search
 		// state is lost on disable.
 		if (this.saveSoonTimer) {

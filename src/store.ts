@@ -2,6 +2,7 @@ import { App, Notice, TFile, TFolder, normalizePath, parseYaml, stringifyYaml } 
 import { FOLDER_NAME_MAX, fileNameTemplateUses, fitToPath, itemFileName, newId, refreshFileNameFormat, safeName } from "./id-service";
 import type { FileNameContext } from "./id-service";
 import { primaryDate } from "./dates";
+import { noteCopied, noteShortened } from "./name-index";
 import { stableStringify } from "./settings-merge";
 import type { DocManifest, DocRef, NodeSnapshot, TreeNode, TrynaId, MirrorMode } from "./types";
 import { DOC_EXTENSION, MAX_HEADING, isReservedFolderName, ATTACHMENTS_SUBFOLDER, formatMirrorRef, parseMirrorRef } from "./types";
@@ -22,7 +23,7 @@ const claimedPaths = new Set<string>();
  *  Compared without case: macOS, Windows and iOS disks treat `Topic.md` and
  *  `topic.md` as one file, and Obsidian's create/rename then throw "already
  *  exists". The default slug is lowercase, but `{{text}}` keeps case. */
-function claimItemPath(app: App, folder: string, wanted: string): string {
+function claimItemPath(app: App, folder: string, wanted: string, full = wanted): string {
 	// Kept within the Windows-safe path length (see fitToPath). Idempotent, so
 	// callers that fitted the name already (materialize's adopt check) get the
 	// same name back.
@@ -36,6 +37,10 @@ function claimItemPath(app: App, folder: string, wanted: string): string {
 	while (taken(name)) name = `${base} ${k++}.md`;
 	const path = `${folder}/${name}`;
 	claimedPaths.add(path.toLowerCase());
+	// Shortened for the path budget: pair it with its full name in the index.
+	// Recorded before the create; the index drops it if the file never appears.
+	// `full` is the unshortened name when the caller fitted `wanted` already.
+	if (base !== full) noteShortened(path, `${full}.md`);
 	return path;
 }
 function releaseItemPath(path: string): void { claimedPaths.delete(path.toLowerCase()); }
@@ -569,6 +574,7 @@ export async function createDoc(app: App, rootFolder: string, rawTitle: string):
 		`${folderPath}/${safe}.${DOC_EXTENSION}`,
 		JSON.stringify(manifest, null, 2),
 	);
+	if (safe !== title) noteShortened(folderPath, title);
 	return { manifest, folder, file };
 }
 
@@ -628,6 +634,9 @@ export async function renameDoc(app: App, doc: DocRef, rawTitle: string): Promis
 		await app.fileManager.renameFile(doc.file, manifestTarget);
 	}
 	await patchManifest(app, doc, (m) => { m.title = title; });
+	// The folder's row followed the rename; it now holds the new title, or
+	// goes if the new title fits without shortening.
+	noteShortened(doc.folder.path, safe !== title ? title : null);
 	return title;
 }
 
@@ -972,7 +981,7 @@ export class DocIndex {
 				if (await this.isFileOf(existing, n.id)) { n.file = existing; return; }
 			}
 		}
-		const path = claimItemPath(this.app, folder, base);
+		const path = claimItemPath(this.app, folder, base, full);
 		try {
 			n.file = await this.io(this.app.vault.create(path, joinBody(n.text, n.note)));
 		} finally {
@@ -1422,6 +1431,8 @@ export class DocIndex {
 		let k = 2;
 		while (this.app.vault.getAbstractFileByPath(group)) group = normalizePath(`${trashDir}/${safe} — ${stamp} (${k++})`);
 		await this.app.vault.createFolder(group);
+		const fullTitle = safeName(title, "Document");
+		if (fullTitle !== safe) noteShortened(group, `${fullTitle} — ${stamp}`);
 		const info = {
 			format: "trynalist-trash", version: 1,
 			docFolder: this.docRef.folder.path,
@@ -1708,6 +1719,8 @@ export async function duplicateDoc(app: App, doc: DocRef, rootFolder: string): P
 			}
 		};
 		await copyFolder(attach, destAttach);
+		// Shortened attachment names are shortened in the copy too.
+		noteCopied(attach.path, destAttach);
 		const oldPrefix = `${attach.path}/`;
 		const newPrefix = `${destAttach}/`;
 		for (const n of targetIndex.nodes.values()) {

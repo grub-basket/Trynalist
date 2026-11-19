@@ -9,6 +9,7 @@ import { describeDue } from "./reminders";
 import type { DueItem } from "./reminders";
 import { DOC_EXTENSION, PANEL_VIEW_TYPE, isReservedFolderName } from "./types";
 import { FOLDER_NAME_MAX, newId, safeName } from "./id-service";
+import { noteShortened } from "./name-index";
 import { parseImport, writeImport } from "./import";
 import { openTrash } from "./trash";
 import {
@@ -57,7 +58,9 @@ function groupFolders(app: TrynalistPanelView["app"], rootFolder: string): strin
 class NewFolderModal extends TrynalistModal {
 	constructor(
 		private plugin: TrynalistPlugin,
-		private onSubmit: (parent: string, name: string) => void,
+		/** `name` is the folder's name on disk; `full` the name before it was
+		 *  capped (the same when it wasn't). */
+		private onSubmit: (parent: string, name: string, full: string) => void,
 	) {
 		super(plugin.app);
 	}
@@ -92,7 +95,7 @@ class NewFolderModal extends TrynalistModal {
 			if (!clean) return;
 			if (isReservedFolderName(clean)) { new Notice(`Trynalist: "${clean}" is a reserved folder name.`); return; }
 			this.close();
-			this.onSubmit(parent, clean);
+			this.onSubmit(parent, clean, safeName(name, ""));
 		};
 		new Setting(this.contentEl).addButton((b) =>
 			b.setButtonText("Create").setCta().onClick(submit),
@@ -284,7 +287,7 @@ export class TrynalistPanelView extends ItemView {
 				new NewDocModal(this.plugin, this.plugin.settings.rootFolder, () => this.scheduleRender()).open(),
 			));
 			menu.addItem((i) => i.setTitle("New folder").setIcon("folder-plus").onClick(() => {
-				new NewFolderModal(this.plugin, (parent, clean) => {
+				new NewFolderModal(this.plugin, (parent, clean, full) => {
 					void (async () => {
 						const path = `${parent}/${clean}`;
 						if (this.app.vault.getAbstractFileByPath(path)) {
@@ -292,6 +295,7 @@ export class TrynalistPanelView extends ItemView {
 							return;
 						}
 						await this.app.vault.createFolder(path);
+						if (full !== clean) noteShortened(path, full);
 						this.lastSignature = "";
 						this.scheduleRender();
 						new Notice(`Trynalist: created the folder "${clean}".`);
@@ -816,6 +820,7 @@ export class TrynalistPanelView extends ItemView {
 			manifest.title = title;
 			manifest.modified = new Date().toISOString();
 			await this.app.vault.adapter.write(`${dest}/${clean}.${DOC_EXTENSION}`, JSON.stringify(manifest, null, 2));
+			if (title !== clean) noteShortened(dest, title);
 			this.lastSignature = "";
 			this.scheduleRender();
 			new Notice(`Trynalist: "${clean}" is now its own document. It starts empty — the items stayed with the original.`, 9000);
