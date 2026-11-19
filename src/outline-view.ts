@@ -851,7 +851,10 @@ export class TrynalistDocView extends FileView {
 		this.noteTimers.clear();
 		for (const [id, el] of [...this.dirtyNotes]) {
 			this.dirtyNotes.delete(id);
+			const typed = this.typedNotes.get(id);
+			this.typedNotes.delete(id);
 			if (el.isConnected && el.dataset.rendered !== "1") await this.saveNoteNow(el, id);
+			else if (typed !== undefined) await this.saveNoteText(id, typed);
 		}
 	}
 
@@ -4162,6 +4165,7 @@ export class TrynalistDocView extends FileView {
 		el.addEventListener("drop", (e) => { if (this.dragId) e.preventDefault(); });
 		el.addEventListener("input", () => {
 			this.noteTypingBurst(n.id);
+			if (el.dataset.rendered !== "1") this.typedRows.set(n.id, el.innerText);
 			this.scheduleSave(n.id);
 			void this.maybeShowLinkSuggest(el);
 		});
@@ -4408,6 +4412,7 @@ export class TrynalistDocView extends FileView {
 		el.addEventListener("input", () => {
 			this.noteTypingBurst(n.id);
 			this.dirtyNotes.set(n.id, el);
+			if (el.dataset.rendered !== "1") this.typedNotes.set(n.id, el.innerText);
 			this.scheduleNoteSave(n.id);
 		});
 		this.ignoreSwipesWhileFocused(el);
@@ -4481,8 +4486,12 @@ export class TrynalistDocView extends FileView {
 			// writing it back would overwrite the change that just happened.
 			if (this.rendering && !this.dirtyNotes.has(n.id)) return;
 			// End-only trim: the note's first line may be indented (see load).
-			const next = el.innerText.replace(/\s+$/, "");
+			// Off the page (a closing tab) innerText drops line breaks; the copy
+			// taken at the last keystroke keeps them.
+			const typed = this.typedNotes.get(n.id);
+			const next = (el.isConnected || typed === undefined ? el.innerText : typed).replace(/\s+$/, "");
 			this.dirtyNotes.delete(n.id);
+			this.typedNotes.delete(n.id);
 			// Paint first, save alongside. Waiting for setBody to resolve before
 			// rendering is what made a note sit as raw text for seconds after
 			// it lost focus.
@@ -4700,7 +4709,16 @@ export class TrynalistDocView extends FileView {
 		const live = idx.nodes.get(id);
 		if (!live || el.dataset.rendered === "1") return;
 		this.dirtyNotes.delete(id);
-		const next = el.innerText.replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "");
+		this.typedNotes.delete(id);
+		await this.saveNoteText(id, el.innerText);
+	}
+
+	/** Save a note's raw text (from its element, or typedNotes on close). */
+	private async saveNoteText(id: TrynaId, raw: string): Promise<void> {
+		const idx = this.index;
+		const live = idx?.nodes.get(id);
+		if (!idx || !live) return;
+		const next = raw.replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "");
 		if (next !== live.note) {
 			await idx.setBody(id, live.text, next);
 			if (live.file) this.queueMirrorRefresh([live.file.path], false);
@@ -4740,7 +4758,22 @@ export class TrynalistDocView extends FileView {
 		const timer = this.saveTimers.get(id);
 		if (timer) window.clearTimeout(timer);
 		this.saveTimers.delete(id);
+		this.typedRows.delete(id);
 	}
+
+	/** The text last typed into a row or note whose save is still pending,
+	 *  read at the keystroke. Obsidian closes a tab by detaching it and
+	 *  unloading its parts BEFORE the final save runs (View.close), so by then
+	 *  the row's element is gone and the save found nothing: whatever was typed
+	 *  in the last 0.6 s (rows) or 1.5 s (notes) before closing the tab or
+	 *  turning the plugin off was lost. Used only when the element is gone or
+	 *  off the page; a connected element is always saved from its DOM. It
+	 *  can't go stale: it exists only while a save is pending (set with the
+	 *  timer at each keystroke), and every path that changes the item first
+	 *  either flushes the save (undo, reload, moves) or cancels it, which
+	 *  drops the copy (split, merge, line break). */
+	private typedRows = new Map<TrynaId, string>();
+	private typedNotes = new Map<TrynaId, string>();
 
 	/** Remember the focused item per document, so reopening lands where you
 	 *  left rather than at the top. Navigating back and forth already restored
@@ -4767,17 +4800,31 @@ export class TrynalistDocView extends FileView {
 		const dom = (el?.isConnected ? el : null) ?? this.contentEl.querySelector<HTMLElement>(
 			`.trynalist-row[data-id="${cssId(id)}"] .trynalist-text`,
 		);
-		if (!dom) return;
-		// A rendered row shows link LABELS; saving from it would replace the
-		// wikilink with its label and lose the target.
-		if (dom.dataset.rendered === "1") return;
+		const typed = this.typedRows.get(id);
+		this.typedRows.delete(id);
+		let raw: string;
+		if (dom?.isConnected) {
+			// A rendered row shows link LABELS; saving from it would replace the
+			// wikilink with its label and lose the target.
+			if (dom.dataset.rendered === "1") return;
+			raw = dom.innerText;
+		} else if (typed !== undefined) {
+			// The row is gone, or off the page in a closing tab (where innerText
+			// reads like textContent and drops line breaks): save what was typed
+			// (see typedRows).
+			raw = typed;
+		} else if (dom && dom.dataset.rendered !== "1") {
+			raw = dom.innerText;
+		} else {
+			return;
+		}
 		// Line breaks inside an item are deliberate (Alt+Enter), so they
 		// survive the save — INCLUDING a trailing one, which is exactly the
 		// state right after Alt+Enter at the end of an item. The old .trim()
 		// here stripped it, which made that chord silently self-revert: the
 		// blur save fired mid-insert and wrote the trimmed text back over the
 		// break. Only spaces/tabs are trimmed from the ends now.
-		const text = rowDomToRaw(dom.innerText)
+		const text = rowDomToRaw(raw)
 			.replace(/\n{3,}/g, "\n\n")
 			.replace(/^[ \t]+|[ \t]+$/g, "");
 		if (text !== node.text) {
